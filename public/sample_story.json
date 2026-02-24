@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "title": "Sample: The Forest Path",
+  "startNodeId": "dialogue_1",
+  "context": {
+    "health": { "type": "number", "default": 100 },
+    "hasKey": { "type": "boolean", "default": false },
+    "faction": { "type": "string", "default": "neutral" }
+  },
+  "nodes": [
+    {
+      "id": "dialogue_1",
+      "type": "dialogue",
+      "position": { "x": 80, "y": 80 },
+      "data": {
+        "character": "Narrator",
+        "text": "You awaken in a dark forest. The air is cold and thick with mist. A path splits before you."
+      }
+    },
+    {
+      "id": "choice_1",
+      "type": "choice",
+      "position": { "x": 420, "y": 80 },
+      "data": {
+        "prompt": "Which path do you take?",
+        "choices": [
+          { "id": "ch_a1", "text": "The left path, towards the light.", "condition": null },
+          { "id": "ch_a2", "text": "The right path, into the shadows.", "condition": null },
+          {
+            "id": "ch_a3",
+            "text": "Use the key you found earlier.",
+            "condition": { "variable": "hasKey", "operator": "==", "value": true }
+          }
+        ]
+      }
+    },
+    {
+      "id": "condition_1",
+      "type": "condition",
+      "position": { "x": 780, "y": 0 },
+      "data": {
+        "variable": "health",
+        "operator": ">",
+        "value": 50
+      }
+    },
+    {
+      "id": "setvar_1",
+      "type": "setVariable",
+      "position": { "x": 780, "y": 180 },
+      "data": {
+        "variable": "hasKey",
+        "operation": "set",
+        "value": true
+      }
+    },
+    {
+      "id": "dialogue_2",
+      "type": "dialogue",
+      "position": { "x": 1140, "y": 0 },
+      "data": {
+        "character": "Narrator",
+        "text": "Strong enough to fight, you push forward through the light path and emerge into a clearing."
+      }
+    },
+    {
+      "id": "dialogue_3",
+      "type": "dialogue",
+      "position": { "x": 1140, "y": 140 },
+      "data": {
+        "character": "Narrator",
+        "text": "Too weak to continue, you collapse on the forest floor. The mist closes in around you."
+      }
+    },
+    {
+      "id": "dialogue_4",
+      "type": "dialogue",
+      "position": { "x": 1140, "y": 280 },
+      "data": {
+        "character": "Narrator",
+        "text": "In the shadows you find a discarded iron key, glinting faintly in the moonlight."
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "dialogue_1", "sourceHandle": "output", "target": "choice_1", "targetHandle": "input" },
+    { "id": "e2", "source": "choice_1", "sourceHandle": "choice-ch_a1", "target": "condition_1", "targetHandle": "input" },
+    { "id": "e3", "source": "choice_1", "sourceHandle": "choice-ch_a2", "target": "setvar_1", "targetHandle": "input" },
+    { "id": "e4", "source": "condition_1", "sourceHandle": "true",  "target": "dialogue_2", "targetHandle": "input" },
+    { "id": "e5", "source": "condition_1", "sourceHandle": "false", "target": "dialogue_3", "targetHandle": "input" },
+    { "id": "e6", "source": "setvar_1",    "sourceHandle": "output","target": "dialogue_4", "targetHandle": "input" }
+  ]
+}
