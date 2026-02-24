@@ -37,6 +37,15 @@
         </svg>
         Condition
       </button>
+      <button class="btn node-btn btn-condswitch" @click="$emit('addNode', 'conditionSwitch')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="17 1 21 5 17 9"/>
+          <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+          <polyline points="7 23 3 19 7 15"/>
+          <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+        </svg>
+        Switch
+      </button>
       <button class="btn node-btn btn-setvar" @click="$emit('addNode', 'setVariable')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="4" y1="9" x2="20" y2="9"/>
@@ -179,6 +188,9 @@ defineEmits(['addNode', 'importJson', 'exportJson', 'newStory'])
 
 .btn-condition { color: #fbbf24; }
 .btn-condition:hover  { background: rgba(180,83,9,0.2); border-color: rgba(180,83,9,0.5); }
+
+.btn-condswitch { color: #a78bfa; }
+.btn-condswitch:hover { background: rgba(109,40,217,0.2); border-color: rgba(109,40,217,0.5); }
 
 .btn-setvar    { color: #f472b6; }
 .btn-setvar:hover    { background: rgba(190,24,93,0.2); border-color: rgba(190,24,93,0.5); }

@@ -31,7 +31,7 @@ veilborn_story_editor/
 ├── package.json
 ├── src/
 │   ├── main.js                          # Vue uygulamasını mount eder
-│   ├── App.vue                          # Kök bileşen; canvas, toolbar, paneller
+│   ├── App.vue                          # Kök bileşen; canvas, toolbar, paneller, localStorage
 │   ├── store.js                         # Tüm state + yardımcı fonksiyonlar
 │   ├── styles/
 │   │   └── base.css                     # Global reset, CSS değişkenleri, ortak sınıflar
@@ -42,7 +42,8 @@ veilborn_story_editor/
 │       └── nodes/
 │           ├── DialogueNode.vue         # Diyalog node görünümü (canvas üzerinde)
 │           ├── ChoiceNode.vue           # Seçim node görünümü
-│           ├── ConditionNode.vue        # Koşul node görünümü
+│           ├── ConditionNode.vue        # Koşul node görünümü (AND/OR/NOT desteği)
+│           ├── ConditionSwitchNode.vue  # Switch/case node görünümü
 │           └── SetVariableNode.vue      # Değişken atama node görünümü
 ```
 
@@ -62,6 +63,9 @@ App.vue
 **State akışı:**
 `store.js` → `reactive` nesneler (`uiStore`, `contextStore`) → bileşenler direkt import eder.
 VueFlow'un kendi node/edge state'i `useVueFlow(FLOW_ID)` composable'ı üzerinden erişilir.
+
+**Auto-save:**
+`App.vue` içinde `watch(nodes, ...)`, `watch(contextStore.params, ...)` ve `watch(uiStore.storyTitle, ...)` ile değişiklikler 600ms debounce ile `localStorage['veilborn_autosave']` anahtarına yazılır. Uygulama açılışında `onMounted` içinde bu veri otomatik yüklenir.
 
 ---
 
@@ -93,6 +97,7 @@ VueFlow'un kendi node/edge state'i `useVueFlow(FLOW_ID)` composable'ı üzerinde
 |-----------|----------|
 | `genNodeId(type)` | `dialogue_1_1234567890` formatında benzersiz ID üretir |
 | `genChoiceId()` | Choice'lar için kısa rastgele ID |
+| `genCaseId()` | ConditionSwitch case'leri için kısa rastgele ID |
 | `genEdgeId()` | Edge'ler için kısa rastgele ID |
 | `createNodeData(type)` | Tipin varsayılan `data` nesnesini döner |
 | `addContextParam(name, type)` | Yeni parametre ekler, başarı/başarısızlık `boolean` döner |
@@ -137,11 +142,6 @@ Oyuncuya seçenek sunar. Her seçeneğin kendi handle'ı vardır (sağ kenarda).
       "condition": null
       // veya condition varsa:
       // "condition": { "variable": "health", "operator": ">", "value": 20 }
-    },
-    {
-      "id": "ch_def456",
-      "text": "Geri dön",
-      "condition": null
     }
   ]
 }
@@ -149,26 +149,52 @@ Oyuncuya seçenek sunar. Her seçeneğin kendi handle'ı vardır (sağ kenarda).
 
 **Handle'lar:** `input` (top) + her choice için `choice-{choice.id}` (right, dikey olarak dağıtılmış)
 
-**Koşullu seçenekler:** Her `choice` opsiyonel bir `condition` nesnesine sahip olabilir. Koşul sağlanmazsa seçenek gizlenir (bu mantık oyun motorunda uygulanır).
-
 ---
 
 ### 3. `condition`
 Context parametresine göre otomatik `true/false` dallanması yapar.
+AND / OR mantıksal operatörleriyle birden fazla koşul birleştirilebilir.
+NOT ile tüm ifade terslenebilir.
 
 ```jsonc
 {
-  "variable": "health",
-  "operator": ">=",     // ==, !=, >, <, >=, <=
-  "value": 50
+  "logic": "and",     // "single" | "and" | "or"
+  "negate": false,    // true → tüm ifadeyi NOT ile sarar
+  "conditions": [
+    { "variable": "health", "operator": ">=", "value": 50 },
+    { "variable": "hasKey", "operator": "==", "value": true }
+  ]
 }
 ```
 
+**Operatörler:** `==`, `!=`, `>`, `<`, `>=`, `<=`
+
 **Handle'lar:** `input` (top) + `true` (right-top) + `false` (right-bottom)
+
+**Geriye uyumluluk:** Eski format `{ variable, operator, value }` canvas'ta ve panelde doğru şekilde gösterilir. Herhangi bir değişiklik yapılırsa yeni formata otomatik geçer.
 
 ---
 
-### 4. `setVariable`
+### 4. `conditionSwitch`
+Bir değişkeni birden fazla case'e karşı karşılaştırır ve eşleşen case'in handle'ına yönlendirir.
+
+```jsonc
+{
+  "variable": "faction",
+  "cases": [
+    { "id": "case_abc", "operator": "==", "value": "rebels", "label": "Rebels" },
+    { "id": "case_def", "operator": "==", "value": "empire", "label": "Empire" },
+    { "id": "case_ghi", "operator": ">",  "value": 50,       "label": ">50" }
+  ],
+  "hasDefault": true
+}
+```
+
+**Handle'lar:** `input` (top) + her case için `case-{case.id}` (right, dağıtılmış) + `default` (right-bottom, `hasDefault` ise)
+
+---
+
+### 5. `setVariable`
 Context parametresinin değerini günceller, sonra tek bir çıkışla devam eder.
 
 ```jsonc
@@ -198,31 +224,14 @@ Context parametresinin değerini günceller, sonra tek bir çıkışla devam ede
 {
   "version": "1.0",
   "title": "Hikaye Adı",
-  "startNodeId": "dialogue_1_1234567890",  // nodes dizisinin ilk elemanı
+  "startNodeId": "dialogue_1_1234567890",
   "context": {
     "health": { "type": "number", "default": 100 },
     "hasKey": { "type": "boolean", "default": false },
     "faction": { "type": "string", "default": "rebels" }
   },
-  "nodes": [
-    {
-      "id": "dialogue_1_1234567890",
-      "type": "dialogue",
-      "position": { "x": 100, "y": 200 },
-      "data": { "character": "Narrator", "text": "…" }
-    }
-    // diğer node'lar…
-  ],
-  "edges": [
-    {
-      "id": "edge_abc",
-      "source": "dialogue_1_1234567890",
-      "sourceHandle": "output",
-      "target": "choice_2_1234567891",
-      "targetHandle": "input"
-    }
-    // diğer edge'ler…
-  ]
+  "nodes": [ /* node listesi */ ],
+  "edges": [ /* edge listesi */ ]
 }
 ```
 
@@ -233,18 +242,25 @@ Context parametresinin değerini günceller, sonra tek bir çıkışla devam ede
 Context; hikaye boyunca takip edilen **global durum değişkenleri** kümesidir.
 
 - Editörde **sol panelden** tanımlanır (isim, tip, başlangıç değeri)
-- `condition` node'ları bu değişkenleri **okur** ve karşılaştırır
+- `condition` ve `conditionSwitch` node'ları bu değişkenleri **okur**
 - `setVariable` node'ları bu değişkenleri **yazar**
 - `choice` node'larındaki koşullar da bu değişkenleri okur
 
-**Desteklenen tipler:**
-| Tip | Kullanım Örneği |
-|-----|-----------------|
-| `number` | `health`, `gold`, `reputation` |
-| `boolean` | `hasKey`, `metKing`, `questComplete` |
-| `string` | `faction`, `playerName`, `lastChoice` |
+**Desteklenen tipler:** `number`, `boolean`, `string`
 
-**İsimlendirme kuralı:** `^[a-zA-Z_][a-zA-Z0-9_]*$` (JavaScript identifier kuralları)
+**İsimlendirme kuralı:** `^[a-zA-Z_][a-zA-Z0-9_]*$`
+
+---
+
+## Auto-Save (localStorage)
+
+- **Anahtar:** `veilborn_autosave`
+- **Tetikleyici:** node değişimi, edge değişimi, başlık değişimi, context değişimi
+- **Debounce:** 600ms (çok sık yazımı önler)
+- **Yükleme:** `onMounted` + `nextTick` + 80ms gecikme (VueFlow init'i bekler)
+- **Gösterge:** Canvas'ın üstünde geçici "Auto-saved" badge'i
+- **Temizleme:** "New Story" ile `localStorage.removeItem(AUTOSAVE_KEY)` çağrılır
+- `_suppressSave` flag'i yükleme sırasındaki sahte save tetiklenmelerini önler
 
 ---
 
@@ -254,7 +270,7 @@ Context; hikaye boyunca takip edilen **global durum değişkenleri** kümesidir.
 ┌─────────────────────────────────────────────────────────┐
 │  TOOLBAR: Brand | Node Ekle | Context | Import/Export   │  ← 48px sabit
 ├──────────┬──────────────────────────────┬───────────────┤
-│          │                              │               │
+│          │   [Auto-saved] badge (top)   │               │
 │ Context  │     VueFlow Canvas           │  Properties   │
 │  Panel   │     (sonsuz canvas)          │    Panel      │
 │ (280px)  │                              │   (280px)     │
@@ -265,9 +281,6 @@ Context; hikaye boyunca takip edilen **global durum değişkenleri** kümesidir.
 └──────────┴──────────────────────────────┴───────────────┘
 ```
 
-Context panel toolbar'daki **Context** butonuyla toggle edilebilir.
-Properties panel yalnızca bir node seçiliyken görünür.
-
 ---
 
 ## CSS Değişkenleri (Design Tokens)
@@ -276,10 +289,10 @@ Properties panel yalnızca bir node seçiliyken görünür.
 
 ```css
 /* Arka planlar */
---bg-primary:   #0b0b16   /* Canvas */
+--bg-primary:   #0b0b16
 --bg-secondary: #111120
---bg-tertiary:  #181828   /* Card'lar */
---bg-panel:     #13131f   /* Toolbar, paneller */
+--bg-tertiary:  #181828
+--bg-panel:     #13131f
 
 /* Kenarlıklar */
 --border:       #252540
@@ -295,10 +308,11 @@ Properties panel yalnızca bir node seçiliyken görünür.
 --accent-hover: #9485ff
 
 /* Node tipi renkleri */
---c-dialogue:  #4f46e5   /* indigo */
---c-choice:    #0d9488   /* teal */
---c-condition: #b45309   /* amber */
---c-setvar:    #be185d   /* pink */
+--c-dialogue:    #4f46e5   /* indigo */
+--c-choice:      #0d9488   /* teal */
+--c-condition:   #b45309   /* amber */
+--c-condswitch:  #6d28d9   /* violet */
+--c-setvar:      #be185d   /* pink */
 
 /* Node boyutları */
 --node-width:  260px
@@ -319,26 +333,24 @@ npm run preview  # dist/ klasörünü önizle
 
 ## Gelecekte Yapılacaklar / Genişleme Alanları
 
-Aşağıdakiler henüz uygulanmamış, ileride eklenebilecek özelliklerdir:
-
 - **Play/Preview modu:** Editörün içinde hikayeyi test etmek için mini bir oyun paneli
 - **End node:** Hikayenin sona erdiğini işaret eden özel bir node tipi
-- **Karakter sistemi:** Yeniden kullanılabilir karakter listesi; her dialogue node'una karakter atanabilir, rengi/avatarı olabilir
-- **Hikaye doğrulama:** Bağlantısız node'lar, eksik hedef handle'lar, döngü tespiti gibi hata raporlaması
+- **Karakter sistemi:** Yeniden kullanılabilir karakter listesi
+- **Hikaye doğrulama:** Bağlantısız node'lar, eksik hedef handle'lar, döngü tespiti
 - **Otomatik düzenleme (layout):** Dagre veya ELK algoritmasıyla node'ları otomatik hizalama
 - **Undo/Redo:** VueFlow'un `useVueFlow` üzerinden history yönetimi
-- **Lokalizasyon:** Çok dilli diyalog metni desteği (her node'da `text` map'i)
+- **Lokalizasyon:** Çok dilli diyalog metni desteği
 - **Yorum node'u:** Canvas üzerine yapışkanlı not bırakmak için görsel-only node
 - **Node gruplama / bölüm sistemi:** Büyük hikayeleri bölümlere ayırma
-- **Oyun motoru entegrasyonu:** Export edilen JSON'u Veilborn oyun runtime'ı nasıl yorumlar — bu dokümante edilmeli
 
 ---
 
 ## Geliştirici Notları
 
 - VueFlow node bileşenleri `defineProps({ id, data, selected })` alır; `data` node'un içeriğidir.
-- Node verisi güncellemek için `updateNode(id, { data: { ...existing, ...patch } })` kullanılır (`PropertiesPanel.vue` içindeki `patch()` helper'ı).
+- Node verisi güncellemek için `updateNode(id, { data: { ...existing, ...patch } })` kullanılır.
 - Edge'ler `smoothstep` tipindedir; import sırasında otomatik eklenir.
-- `loadStory()` çağrıldığında `_counter` 200_000'e sıfırlanır — böylece yüklenen node ID'leriyle çakışma olmaz.
-- Hikaye başlığı `uiStore.storyTitle`'da tutulur; export anında JSON'a yazılır.
-- Context panel ile Properties panel bağımsızdır; aynı anda ikisi de açık olabilir.
+- `loadStory()` çağrıldığında `_counter` 200_000'e sıfırlanır.
+- `condition` node'u eski `{ variable, operator, value }` formatını geriye dönük olarak destekler; panel açılıp değiştirildiğinde yeni formata geçer.
+- `conditionSwitch` case handle ID'leri: `case-{case.id}`, default handle: `default`.
+- Auto-save `_suppressSave` flag'i ile `loadStory()` çağrısı sırasındaki değişiklik tetiklenmelerinden korunur.

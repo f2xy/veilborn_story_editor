@@ -10,6 +10,9 @@ export function genNodeId(type) {
 export function genChoiceId() {
   return `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 }
+export function genCaseId() {
+  return `case_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+}
 export function genEdgeId() {
   return `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 }
@@ -28,7 +31,20 @@ export function createNodeData(type) {
         ]
       }
     case 'condition':
-      return { variable: '', operator: '==', value: '' }
+      return {
+        logic: 'single',   // 'single' | 'and' | 'or'
+        negate: false,
+        conditions: [{ variable: '', operator: '==', value: '' }]
+      }
+    case 'conditionSwitch':
+      return {
+        variable: '',
+        cases: [
+          { id: genCaseId(), operator: '==', value: '', label: '' },
+          { id: genCaseId(), operator: '==', value: '', label: '' }
+        ],
+        hasDefault: true
+      }
     case 'setVariable':
       return { variable: '', operation: 'set', value: '' }
     default:

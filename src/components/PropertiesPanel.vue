@@ -98,6 +98,99 @@
 
       <!-- ── CONDITION ───────────────────────────────────────────────── -->
       <template v-else-if="node.type === 'condition'">
+
+        <!-- Logic + Negate row -->
+        <div class="form-group">
+          <label class="form-label">Logic</label>
+          <div class="logic-row">
+            <select class="input" :value="condLogic" @change="changeCondLogic($event.target.value)">
+              <option value="single">Single condition</option>
+              <option value="and">AND — all must match</option>
+              <option value="or">OR — any must match</option>
+            </select>
+            <label class="toggle-label negate-toggle">
+              <input type="checkbox" :checked="condNegate"
+                @change="patch({ logic: condLogic, negate: $event.target.checked, conditions: condConditions })" />
+              <span>NOT</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Condition rows -->
+        <div class="form-label" style="margin-bottom:6px">
+          {{ condLogic === 'single' ? 'Condition' : 'Conditions' }}
+        </div>
+
+        <div class="cond-list">
+          <template v-for="(cond, i) in condConditions" :key="i">
+            <div v-if="i > 0" class="logic-sep-label">{{ condLogic.toUpperCase() }}</div>
+            <div class="cond-editor">
+              <div class="cond-row">
+                <select class="input input-sm" :value="cond.variable"
+                  @change="updateCond(i, 'variable', $event.target.value)">
+                  <option value="">— variable —</option>
+                  <option v-for="(_, n) in contextStore.params" :key="n" :value="n">{{ n }}</option>
+                </select>
+                <select class="input input-sm cond-op-select" :value="cond.operator"
+                  @change="updateCond(i, 'operator', $event.target.value)">
+                  <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
+                </select>
+                <template v-if="getParamType(cond.variable) === 'boolean'">
+                  <select class="input input-sm cond-val-input" :value="String(cond.value)"
+                    @change="updateCond(i, 'value', $event.target.value === 'true')">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </template>
+                <template v-else>
+                  <input class="input input-sm cond-val-input" :value="String(cond.value ?? '')"
+                    @input="updateCond(i, 'value', parseCondValue(cond.variable, $event.target.value))"
+                    placeholder="value" />
+                </template>
+                <button v-if="condLogic !== 'single'"
+                  class="btn btn-icon btn-ghost btn-danger"
+                  @click="removeCond(i)"
+                  :disabled="condConditions.length <= 1"
+                  title="Remove">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <button v-if="condLogic !== 'single'" class="btn" style="width:100%;margin-top:6px" @click="addCond">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add Condition
+        </button>
+
+        <!-- Preview -->
+        <div class="condition-preview" style="margin-top:10px; flex-wrap: wrap; gap: 4px;">
+          <span v-if="condNegate" class="co" style="color:#e879f9">NOT</span>
+          <span class="co">(</span>
+          <template v-for="(cond, i) in condConditions" :key="i">
+            <span v-if="i > 0" class="co">{{ condLogic.toUpperCase() }}</span>
+            <span class="cv">{{ cond.variable || '?' }}</span>
+            <span class="co">{{ cond.operator }}</span>
+            <span class="cv2">{{ fmtPreviewVal(cond) }}</span>
+          </template>
+          <span class="co">)</span>
+        </div>
+
+        <div class="branch-info" style="margin-top:8px">
+          <div class="bi bi-true">→ <strong>True</strong>: right top handle</div>
+          <div class="bi bi-false">→ <strong>False</strong>: right bottom handle</div>
+        </div>
+      </template>
+
+      <!-- ── CONDITION SWITCH ────────────────────────────────────────── -->
+      <template v-else-if="node.type === 'conditionSwitch'">
         <div class="form-group">
           <label class="form-label">Variable</label>
           <select class="input" :value="data.variable" @change="patch({ variable: $event.target.value })">
@@ -105,34 +198,59 @@
             <option v-for="(_, n) in contextStore.params" :key="n" :value="n">{{ n }}</option>
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Operator</label>
-          <select class="input" :value="data.operator" @change="patch({ operator: $event.target.value })">
-            <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
-          </select>
+
+        <div class="form-label" style="margin-bottom:6px">Cases</div>
+
+        <div class="choice-list">
+          <div v-for="(c, i) in data.cases" :key="c.id" class="choice-editor">
+            <div class="choice-editor-header" style="margin-bottom:5px">
+              <span class="choice-num" style="background:var(--c-condswitch)">{{ i + 1 }}</span>
+              <input class="input" :value="c.label"
+                @input="updateCase(i, 'label', $event.target.value)"
+                placeholder="Label (optional)" />
+              <button class="btn btn-icon btn-ghost btn-danger" @click="removeCase(i)"
+                :disabled="data.cases.length <= 1" title="Remove case">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div class="cond-row">
+              <select class="input input-sm cond-op-select" :value="c.operator"
+                @change="updateCase(i, 'operator', $event.target.value)">
+                <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
+              </select>
+              <template v-if="switchParamType === 'boolean'">
+                <select class="input input-sm" style="flex:1" :value="String(c.value)"
+                  @change="updateCase(i, 'value', $event.target.value === 'true')">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </template>
+              <template v-else>
+                <input class="input input-sm" style="flex:1" :value="String(c.value ?? '')"
+                  @input="updateCase(i, 'value', parseCondValue(data.variable, $event.target.value))"
+                  :placeholder="switchParamType === 'number' ? '0' : 'value'" />
+              </template>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Value</label>
-          <template v-if="selectedParamType === 'boolean'">
-            <select class="input" :value="String(data.value)" @change="patch({ value: $event.target.value === 'true' })">
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-          </template>
-          <template v-else>
-            <input class="input" :value="String(data.value ?? '')"
-              @input="patch({ value: parseCondValue(data.variable, $event.target.value) })"
-              placeholder="comparison value" />
-          </template>
-        </div>
-        <div class="condition-preview">
-          <span class="cv">{{ data.variable || '?' }}</span>
-          <span class="co">{{ data.operator }}</span>
-          <span class="cv2">{{ data.value !== undefined && data.value !== '' ? String(data.value) : '?' }}</span>
-        </div>
-        <div class="branch-info">
-          <div class="bi bi-true">→ <strong>True</strong> output: right top handle</div>
-          <div class="bi bi-false">→ <strong>False</strong> output: right bottom handle</div>
+
+        <button class="btn" style="width:100%;margin-top:6px" @click="addCase">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add Case
+        </button>
+
+        <div class="form-group" style="margin-top:10px">
+          <label class="toggle-label">
+            <input type="checkbox" :checked="data.hasDefault"
+              @change="patch({ hasDefault: $event.target.checked })" />
+            <span>Default output (fallthrough)</span>
+          </label>
         </div>
       </template>
 
@@ -196,7 +314,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
-import { uiStore, contextStore, genChoiceId, FLOW_ID } from '@/store.js'
+import { uiStore, contextStore, genChoiceId, genCaseId, FLOW_ID } from '@/store.js'
 
 const { findNode, updateNode, removeNodes, removeEdges, getEdges } = useVueFlow(FLOW_ID)
 
@@ -210,7 +328,13 @@ const data = computed(() => node.value?.data ?? {})
 const operators = ['==', '!=', '>', '<', '>=', '<=']
 
 const typeLabel = computed(() => {
-  const labels = { dialogue: 'Dialogue', choice: 'Choice', condition: 'Condition', setVariable: 'Set Variable' }
+  const labels = {
+    dialogue: 'Dialogue',
+    choice: 'Choice',
+    condition: 'Condition',
+    conditionSwitch: 'Switch',
+    setVariable: 'Set Variable'
+  }
   return labels[node.value?.type] ?? node.value?.type
 })
 
@@ -219,11 +343,13 @@ const typeColor = computed(() => {
     dialogue: 'var(--c-dialogue)',
     choice: 'var(--c-choice)',
     condition: 'var(--c-condition)',
+    conditionSwitch: 'var(--c-condswitch)',
     setVariable: 'var(--c-setvar)'
   }
   return colors[node.value?.type] ?? 'var(--accent)'
 })
 
+// For setVariable
 const selectedParamType = computed(() => {
   const varName = data.value?.variable
   return varName && contextStore.params[varName]?.type
@@ -260,7 +386,6 @@ function addChoice() {
 function removeChoice(index) {
   const choices = [...(data.value.choices || [])]
   const removed = choices.splice(index, 1)[0]
-  // Clean up edges connected to this choice handle
   const edgesToRemove = getEdges.value.filter(e =>
     e.source === node.value.id && e.sourceHandle === `choice-${removed.id}`
   )
@@ -289,6 +414,75 @@ function updateChoiceCond(index, field, value) {
   patch({ choices })
 }
 
+// ── Condition helpers ────────────────────────────────────────────────────────
+
+// Normalize both legacy { variable, operator, value } and new { logic, negate, conditions } formats
+const condConditions = computed(() => {
+  if (data.value.conditions?.length) return data.value.conditions
+  return [{ variable: data.value.variable || '', operator: data.value.operator || '==', value: data.value.value ?? '' }]
+})
+
+const condLogic = computed(() => data.value.logic || 'single')
+const condNegate = computed(() => data.value.negate || false)
+
+function changeCondLogic(newLogic) {
+  patch({ logic: newLogic, negate: condNegate.value, conditions: condConditions.value })
+}
+
+function updateCond(index, field, value) {
+  const conditions = condConditions.value.map((c, i) => i === index ? { ...c, [field]: value } : c)
+  patch({ logic: condLogic.value, negate: condNegate.value, conditions })
+}
+
+function addCond() {
+  const conditions = [...condConditions.value, { variable: '', operator: '==', value: '' }]
+  patch({ logic: condLogic.value, negate: condNegate.value, conditions })
+}
+
+function removeCond(index) {
+  const conditions = condConditions.value.filter((_, i) => i !== index)
+  patch({ logic: condLogic.value, negate: condNegate.value, conditions })
+}
+
+function getParamType(varName) {
+  return contextStore.params[varName]?.type
+}
+
+function fmtPreviewVal(cond) {
+  const v = cond.value
+  if (v === undefined || v === null || v === '') return '?'
+  if (typeof v === 'boolean') return v ? 'true' : 'false'
+  return String(v)
+}
+
+// ── ConditionSwitch helpers ──────────────────────────────────────────────────
+
+const switchParamType = computed(() => {
+  if (node.value?.type !== 'conditionSwitch') return null
+  return contextStore.params[data.value.variable]?.type
+})
+
+function updateCase(index, field, value) {
+  const cases = data.value.cases.map((c, i) => i === index ? { ...c, [field]: value } : c)
+  patch({ cases })
+}
+
+function addCase() {
+  const cases = [...(data.value.cases || []), { id: genCaseId(), operator: '==', value: '', label: '' }]
+  patch({ cases })
+}
+
+function removeCase(index) {
+  const cases = [...(data.value.cases || [])]
+  const removed = cases.splice(index, 1)[0]
+  const edgesToRemove = getEdges.value.filter(e =>
+    e.source === node.value.id && e.sourceHandle === `case-${removed.id}`
+  )
+  if (edgesToRemove.length) removeEdges(edgesToRemove.map(e => e.id))
+  patch({ cases })
+}
+
+// ── Shared helpers ───────────────────────────────────────────────────────────
 function parseCondValue(varName, raw) {
   const type = contextStore.params[varName]?.type
   if (type === 'number') return raw === '' ? '' : Number(raw)
@@ -419,19 +613,46 @@ function onOperationChange(op) {
 .cond-val-input { width: 70px; flex-shrink: 0; }
 .input-sm { padding: 4px 7px; font-size: 11px; }
 
+/* Condition logic */
+.logic-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.negate-toggle { flex-shrink: 0; color: #e879f9; }
+
+.cond-list { display: flex; flex-direction: column; gap: 4px; }
+
+.cond-editor {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px;
+}
+
+.logic-sep-label {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 1.5px;
+  padding: 2px 0;
+}
+
 /* Condition/SetVar preview */
 .condition-preview {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 8px 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 6px;
   font-family: monospace;
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 4px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 .cv  { color: #93c5fd; font-weight: 600; }
 .co  { color: #fbbf24; }

@@ -23,6 +23,7 @@
           @pane-click="onPaneClick"
           @connect="onConnect"
           @nodes-change="onNodesChange"
+          @edges-change="scheduleSave"
         >
           <Background :variant="BackgroundVariant.Dots" :gap="24" :size="1" />
           <Controls />
@@ -31,6 +32,16 @@
             :masked-color="'#0b0b16'"
           />
         </VueFlow>
+
+        <!-- Auto-save indicator -->
+        <div class="autosave-badge" :class="{ visible: autosaveVisible }">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Auto-saved
+        </div>
       </div>
 
       <PropertiesPanel />
@@ -51,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, markRaw, computed } from 'vue'
+import { ref, markRaw, watch, nextTick, onMounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background, BackgroundVariant } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -64,20 +75,23 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import DialogueNode from '@/components/nodes/DialogueNode.vue'
 import ChoiceNode from '@/components/nodes/ChoiceNode.vue'
 import ConditionNode from '@/components/nodes/ConditionNode.vue'
+import ConditionSwitchNode from '@/components/nodes/ConditionSwitchNode.vue'
 import SetVariableNode from '@/components/nodes/SetVariableNode.vue'
 
 import { FLOW_ID, uiStore, contextStore, genNodeId, genEdgeId, createNodeData, loadStory, exportStory } from '@/store.js'
 
 // ── Node type registry ────────────────────────────────────────────────────────
 const nodeTypes = {
-  dialogue:    markRaw(DialogueNode),
-  choice:      markRaw(ChoiceNode),
-  condition:   markRaw(ConditionNode),
-  setVariable: markRaw(SetVariableNode)
+  dialogue:        markRaw(DialogueNode),
+  choice:          markRaw(ChoiceNode),
+  condition:       markRaw(ConditionNode),
+  conditionSwitch: markRaw(ConditionSwitchNode),
+  setVariable:     markRaw(SetVariableNode)
 }
 
 // ── VueFlow instance ──────────────────────────────────────────────────────────
-const { addNodes, addEdges, getViewport, removeNodes } = useVueFlow(FLOW_ID)
+const flowInstance = useVueFlow(FLOW_ID)
+const { addNodes, addEdges, getViewport, removeNodes, nodes, edges } = flowInstance
 
 // ── Node placement ────────────────────────────────────────────────────────────
 function viewportCenter() {
@@ -112,7 +126,6 @@ function onPaneClick() {
 
 // ── Connection ────────────────────────────────────────────────────────────────
 function onConnect(params) {
-  // Allow only one edge per source-handle combo
   addEdges([{
     id: genEdgeId(),
     source: params.source,
@@ -130,22 +143,23 @@ function onNodesChange(changes) {
       uiStore.selectedNodeId = null
     }
   }
+  scheduleSave()
 }
 
 // ── Minimap color ─────────────────────────────────────────────────────────────
 function minimapNodeColor(node) {
   const colors = {
-    dialogue: '#4f46e5',
-    choice: '#0d9488',
-    condition: '#b45309',
-    setVariable: '#be185d'
+    dialogue:        '#4f46e5',
+    choice:          '#0d9488',
+    condition:       '#b45309',
+    conditionSwitch: '#6d28d9',
+    setVariable:     '#be185d'
   }
   return colors[node.type] ?? '#6c5ce7'
 }
 
 // ── Import JSON ───────────────────────────────────────────────────────────────
 const fileInput = ref(null)
-const flowInstance = useVueFlow(FLOW_ID)
 
 function handleImportJson() {
   fileInput.value?.click()
@@ -162,7 +176,6 @@ async function onFileSelected(event) {
   } catch (e) {
     toast('Failed to parse JSON: ' + e.message, 'error')
   }
-  // Reset so same file can be re-selected
   event.target.value = ''
 }
 
@@ -185,8 +198,58 @@ function handleExportJson() {
 function handleNewStory() {
   if (!confirm('Start a new story? All unsaved work will be lost.')) return
   loadStory({ nodes: [], edges: [], context: {}, title: 'Untitled Story' }, flowInstance)
+  localStorage.removeItem(AUTOSAVE_KEY)
   toast('New story created.', 'success')
 }
+
+// ── Auto-save to localStorage ─────────────────────────────────────────────────
+const AUTOSAVE_KEY = 'veilborn_autosave'
+const autosaveVisible = ref(false)
+let saveTimer = null
+let autosaveBadgeTimer = null
+let _suppressSave = false   // prevents spurious save during initial load
+
+function scheduleSave() {
+  if (_suppressSave) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    try {
+      const data = exportStory(flowInstance)
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data))
+      showAutosaveBadge()
+    } catch (_) { /* ignore */ }
+  }, 600)
+}
+
+function showAutosaveBadge() {
+  autosaveVisible.value = true
+  clearTimeout(autosaveBadgeTimer)
+  autosaveBadgeTimer = setTimeout(() => { autosaveVisible.value = false }, 2000)
+}
+
+// Watch reactive state for changes → schedule save
+watch(nodes, scheduleSave, { deep: true })
+watch(() => uiStore.storyTitle, scheduleSave)
+watch(() => contextStore.params, scheduleSave, { deep: true })
+
+// ── Restore from localStorage on mount ───────────────────────────────────────
+onMounted(() => {
+  nextTick(() => {
+    setTimeout(() => {
+      const saved = localStorage.getItem(AUTOSAVE_KEY)
+      if (!saved) return
+      try {
+        const json = JSON.parse(saved)
+        _suppressSave = true
+        loadStory(json, flowInstance)
+        _suppressSave = false
+        toast('Auto-saved session restored.', 'info')
+      } catch (_) {
+        _suppressSave = false
+      }
+    }, 80)
+  })
+})
 
 // ── Toasts ────────────────────────────────────────────────────────────────────
 const toasts = ref([])
@@ -221,6 +284,33 @@ function toast(message, type = 'info') {
   flex: 1;
   position: relative;
   min-width: 0;
+}
+
+/* ── Auto-save badge ── */
+.autosave-badge {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(19,19,31,0.9);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+.autosave-badge.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ── Toasts ── */
