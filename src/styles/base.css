@@ -1,0 +1,222 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary:   #0b0b16;
+  --bg-secondary: #111120;
+  --bg-tertiary:  #181828;
+  --bg-panel:     #13131f;
+  --border:       #252540;
+  --border-light: #33335a;
+  --text-primary: #e4e4f0;
+  --text-secondary: #8888aa;
+  --text-muted:   #55557a;
+
+  --accent:       #7c6ef5;
+  --accent-hover: #9485ff;
+
+  --c-dialogue:    #4f46e5;
+  --c-choice:      #0d9488;
+  --c-condition:   #b45309;
+  --c-condswitch:  #6d28d9;
+  --c-setvar:      #be185d;
+
+  --node-bg:      #14141f;
+  --node-border:  #2a2a45;
+  --node-width:   260px;
+  --panel-width:  280px;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+  user-select: none;
+}
+.btn:hover { background: var(--border); border-color: var(--text-muted); }
+.btn:active { opacity: 0.8; }
+
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-accent:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover { background: var(--bg-tertiary); border-color: var(--border); }
+
+.btn-danger { color: #f87171; }
+.btn-danger:hover { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.4); }
+
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.btn-icon { padding: 5px 7px; }
+
+/* ── Inputs ── */
+.input {
+  width: 100%;
+  padding: 6px 9px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text-muted); }
+
+textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
+select.input { cursor: pointer; }
+input[type="number"].input { -moz-appearance: textfield; }
+input[type="number"].input::-webkit-outer-spin-button,
+input[type="number"].input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* ── Form ── */
+.form-group { margin-bottom: 10px; }
+.form-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 4px;
+}
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
+
+/* ── Node base ── */
+.vf-node {
+  width: var(--node-width);
+  background: var(--node-bg);
+  border: 1.5px solid var(--node-border);
+  border-radius: 10px;
+  overflow: visible;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  cursor: default;
+}
+.vf-node.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124,110,245,0.25), 0 6px 24px rgba(0,0,0,0.5);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border-radius: 8px 8px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.95);
+}
+.node-header svg { flex-shrink: 0; }
+
+.node-body {
+  padding: 9px 11px 10px;
+  overflow: hidden;
+  border-radius: 0 0 8px 8px;
+}
+
+.node-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.node-preview.empty { color: var(--text-muted); font-style: italic; }
+
+.node-char {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+
+/* ── VueFlow handle overrides ── */
+.vue-flow__handle {
+  width: 11px !important;
+  height: 11px !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--node-bg) !important;
+  transition: transform 0.1s;
+}
+.vue-flow__handle:hover { transform: scale(1.3); }
+.vue-flow__handle.source { background: var(--accent) !important; }
+.vue-flow__handle.target { background: #38bdf8 !important; }
+
+/* ── VueFlow canvas ── */
+.vue-flow { background: var(--bg-primary); }
+.vue-flow__background pattern { stroke: var(--border) !important; }
+.vue-flow__edge-path { stroke: var(--border-light) !important; stroke-width: 2 !important; }
+.vue-flow__edge.selected .vue-flow__edge-path { stroke: var(--accent) !important; }
+
+/* ── Controls & Minimap overrides ── */
+.vue-flow__controls {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+.vue-flow__controls-button {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+}
+.vue-flow__controls-button:hover {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+.vue-flow__minimap {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+}
