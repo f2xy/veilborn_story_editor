@@ -37,7 +37,7 @@
               class="var-chip"
               :title="`Insert {${name}}`"
               @click="insertVariable(name)"
-            >{{{ name }}}</button>
+            >{{ '{' + name + '}' }}</button>
           </div>
           <div class="var-hint">Use <code>{varName}</code> to embed context values in text</div>
         </div>
