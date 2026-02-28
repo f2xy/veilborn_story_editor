@@ -7,6 +7,15 @@
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
       Dialogue
+      <button
+        class="play-from-btn"
+        title="Buradan oyna"
+        @click.stop="uiStore.playFromNodeId = id"
+      >
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+      </button>
     </div>
 
     <div class="node-body">
@@ -21,7 +30,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
-import { contextStore } from '@/store.js'
+import { contextStore, uiStore } from '@/store.js'
 
 const props = defineProps({
   id: String,
@@ -53,6 +62,41 @@ const previewHtml = computed(() => {
 </script>
 
 <style scoped>
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.play-from-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.vf-node:hover .play-from-btn,
+.vf-node.selected .play-from-btn {
+  opacity: 1;
+}
+
+.play-from-btn:hover {
+  background: rgba(74, 222, 128, 0.35);
+  border-color: rgba(74, 222, 128, 0.6);
+  color: #4ade80;
+}
+
 .var-token {
   color: #a78bfa;
   background: rgba(124, 110, 245, 0.15);
