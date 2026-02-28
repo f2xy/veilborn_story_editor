@@ -59,6 +59,15 @@
 
     <!-- Right actions -->
     <div class="toolbar-actions">
+      <button class="btn btn-play" title="Play story (test mode)" @click="$emit('playStory')">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        Play
+      </button>
+
+      <div class="separator"></div>
+
       <button class="btn btn-ghost" title="Toggle context panel" @click="uiStore.contextPanelOpen = !uiStore.contextPanelOpen">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -103,7 +112,7 @@
 <script setup>
 import { uiStore } from '@/store.js'
 
-defineEmits(['addNode', 'importJson', 'exportJson', 'newStory'])
+defineEmits(['addNode', 'importJson', 'exportJson', 'newStory', 'playStory'])
 </script>
 
 <style scoped>
@@ -200,6 +209,26 @@ defineEmits(['addNode', 'importJson', 'exportJson', 'newStory'])
   align-items: center;
   gap: 4px;
   margin-left: auto;
+}
+
+.btn-play {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 5px;
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-play:hover {
+  background: rgba(74, 222, 128, 0.22);
+  border-color: rgba(74, 222, 128, 0.6);
 }
 
 .separator {
