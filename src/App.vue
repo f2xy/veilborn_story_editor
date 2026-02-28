@@ -5,6 +5,7 @@
       @importJson="handleImportJson"
       @exportJson="handleExportJson"
       @newStory="handleNewStory"
+      @playStory="handlePlayStory"
     />
 
     <div class="editor-body">
@@ -48,6 +49,13 @@
       <PropertiesPanel />
     </div>
 
+    <!-- Play mode overlay -->
+    <StoryPlayer
+      v-if="playModeActive"
+      :story="playStoryData"
+      @close="playModeActive = false"
+    />
+
     <!-- Hidden import input -->
     <input ref="fileInput" type="file" accept=".json" style="display:none" @change="onFileSelected" />
 
@@ -72,6 +80,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import EditorToolbar from '@/components/EditorToolbar.vue'
 import ContextPanel from '@/components/ContextPanel.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
+import StoryPlayer from '@/components/StoryPlayer.vue'
 
 import DialogueNode from '@/components/nodes/DialogueNode.vue'
 import ChoiceNode from '@/components/nodes/ChoiceNode.vue'
@@ -212,6 +221,20 @@ function handleExportJson() {
   a.click()
   URL.revokeObjectURL(url)
   toast('Story exported.', 'success')
+}
+
+// ── Play story ────────────────────────────────────────────────────────────────
+const playModeActive = ref(false)
+const playStoryData  = ref(null)
+
+function handlePlayStory() {
+  const data = exportStory(flowInstance)
+  if (!data.nodes?.length) {
+    toast('Oynatmak için en az bir node ekleyin.', 'error')
+    return
+  }
+  playStoryData.value = data
+  playModeActive.value = true
 }
 
 // ── New story ─────────────────────────────────────────────────────────────────
