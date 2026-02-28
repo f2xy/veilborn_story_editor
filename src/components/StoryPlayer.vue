@@ -67,9 +67,7 @@
 
           <!-- Choice -->
           <div v-else-if="currentNode?.type === 'choice'" class="choice-box">
-            <p v-if="currentNode.data.prompt" class="choice-prompt">
-              {{ currentNode.data.prompt }}
-            </p>
+            <p v-if="currentNode.data.prompt" class="choice-prompt" v-html="renderedPrompt"></p>
             <p v-else class="choice-prompt empty">Ne yapmak istersin?</p>
           </div>
         </template>
@@ -237,16 +235,18 @@ const visibleChoices = computed(() => {
 })
 
 // Substitute $varName$ tokens with live context values
-const renderedText = computed(() => {
-  const raw = currentNode.value?.data?.text || ''
-  const escaped = raw
+function renderVars(raw) {
+  const escaped = (raw || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return escaped.replace(/\$([a-zA-Z_][a-zA-Z0-9_]*)\$/g, (_, name) => {
     const val = context.value[name]
     if (val === undefined) return `<span class="var-unknown">$${name}$</span>`
     return `<span class="var-live">${String(val)}</span>`
   })
-})
+}
+
+const renderedText   = computed(() => renderVars(currentNode.value?.data?.text))
+const renderedPrompt = computed(() => renderVars(currentNode.value?.data?.prompt))
 
 // ── Condition evaluation ──────────────────────────────────────────────────────
 function evalSingleCond(cond) {
