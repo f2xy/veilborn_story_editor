@@ -127,9 +127,15 @@ function onPaneClick() {
 
 // ── Connection ────────────────────────────────────────────────────────────────
 
-// Kendi üzerine bağlantı çekilmesini engeller
+// Geçerli bağlantı kuralları:
+//   - Bir node kendi kendine bağlanamaz
+//   - Hedef handle daima "input" adını taşır; source → target yönü zorunlu
+//   - "input" handle'ından (giriş noktasından) bağlantı başlatılamaz
 function isValidConnection(connection) {
-  return connection.source !== connection.target
+  if (connection.source === connection.target) return false
+  if (connection.targetHandle !== 'input') return false
+  if (connection.sourceHandle === 'input') return false
+  return true
 }
 
 function onConnect(params) {
