@@ -11,9 +11,7 @@
 
     <div class="node-body">
       <div v-if="data.character" class="node-char">{{ data.character }}</div>
-      <div class="node-preview" :class="{ empty: !data.text }">
-        {{ data.text ? clip(data.text, 90) : 'Click to add text…' }}
-      </div>
+      <div class="node-preview" :class="{ empty: !data.text }" v-html="previewHtml"></div>
     </div>
 
     <Handle type="source" :position="Position.Bottom" id="output" />
@@ -21,9 +19,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { contextStore } from '@/store.js'
 
-defineProps({
+const props = defineProps({
   id: String,
   data: { type: Object, default: () => ({}) },
   selected: Boolean
@@ -32,4 +32,37 @@ defineProps({
 function clip(text, max) {
   return text.length > max ? text.slice(0, max) + '…' : text
 }
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const previewHtml = computed(() => {
+  if (!props.data.text) return '<span class="empty-placeholder">Click to add text…</span>'
+  const clipped = clip(props.data.text, 90)
+  const escaped = escapeHtml(clipped)
+  return escaped.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_, name) => {
+    const known = contextStore.params[name] !== undefined
+    return `<span class="var-token${known ? '' : ' var-unknown'}">{${name}}</span>`
+  })
+})
 </script>
+
+<style scoped>
+.var-token {
+  color: #a78bfa;
+  background: rgba(124, 110, 245, 0.15);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-style: normal;
+}
+
+.var-unknown {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+</style>
