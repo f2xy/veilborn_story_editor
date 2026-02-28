@@ -13,9 +13,7 @@
     </div>
 
     <div class="node-body">
-      <div class="node-preview" :class="{ empty: !data.prompt }" style="margin-bottom: 8px;">
-        {{ data.prompt ? clip(data.prompt, 60) : 'Click to add prompt…' }}
-      </div>
+      <div class="node-preview" :class="{ empty: !data.prompt }" style="margin-bottom: 8px;" v-html="promptHtml"></div>
 
       <div class="choices">
         <div
@@ -43,9 +41,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { contextStore } from '@/store.js'
 
-defineProps({
+const props = defineProps({
   id: String,
   data: { type: Object, default: () => ({ prompt: '', choices: [] }) },
   selected: Boolean
@@ -55,6 +55,24 @@ function clip(text, max) {
   return text.length > max ? text.slice(0, max) + '…' : text
 }
 
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const promptHtml = computed(() => {
+  if (!props.data.prompt) return '<span class="empty-placeholder">Click to add prompt…</span>'
+  const clipped = clip(props.data.prompt, 60)
+  const escaped = escapeHtml(clipped)
+  return escaped.replace(/\$([a-zA-Z_][a-zA-Z0-9_]*)\$/g, (_, name) => {
+    const known = contextStore.params[name] !== undefined
+    return `<span class="var-token${known ? '' : ' var-unknown'}">$${name}$</span>`
+  })
+})
+
 function choiceHandleStyle(index, total) {
   const pct = ((index + 1) / (total + 1)) * 100
   return { top: `${pct}%`, right: '-6px', transform: 'translateY(-50%)' }
@@ -62,6 +80,19 @@ function choiceHandleStyle(index, total) {
 </script>
 
 <style scoped>
+.var-token {
+  color: #a78bfa;
+  background: rgba(124, 110, 245, 0.15);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-style: normal;
+}
+
+.var-unknown {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+
 .choices { display: flex; flex-direction: column; gap: 4px; }
 
 .choice-row {
