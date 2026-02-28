@@ -17,6 +17,7 @@
           :node-types="nodeTypes"
           :default-edge-options="{ type: 'smoothstep' }"
           :connect-on-click="false"
+          :is-valid-connection="isValidConnection"
           delete-key-code="Delete"
           fit-view-on-init
           @node-click="onNodeClick"
@@ -91,7 +92,7 @@ const nodeTypes = {
 
 // ── VueFlow instance ──────────────────────────────────────────────────────────
 const flowInstance = useVueFlow(FLOW_ID)
-const { addNodes, addEdges, getViewport, removeNodes, nodes, edges } = flowInstance
+const { addNodes, addEdges, removeEdges, getViewport, removeNodes, nodes, edges } = flowInstance
 
 // ── Node placement ────────────────────────────────────────────────────────────
 function viewportCenter() {
@@ -125,7 +126,24 @@ function onPaneClick() {
 }
 
 // ── Connection ────────────────────────────────────────────────────────────────
+
+// Kendi üzerine bağlantı çekilmesini engeller
+function isValidConnection(connection) {
+  return connection.source !== connection.target
+}
+
 function onConnect(params) {
+  // Aynı kaynak handle'dan gelen mevcut kenarları kaldır (her çıkıştan tek bağlantı)
+  const dupSource = edges.value.filter(
+    e => e.source === params.source && e.sourceHandle === params.sourceHandle
+  )
+  // Aynı hedef handle'a gelen mevcut kenarları kaldır (her girişe tek bağlantı)
+  const dupTarget = edges.value.filter(
+    e => e.target === params.target && e.targetHandle === params.targetHandle
+  )
+  const toRemove = [...new Set([...dupSource.map(e => e.id), ...dupTarget.map(e => e.id)])]
+  if (toRemove.length) removeEdges(toRemove)
+
   addEdges([{
     id: genEdgeId(),
     source: params.source,
