@@ -45,9 +45,9 @@ const previewHtml = computed(() => {
   if (!props.data.text) return '<span class="empty-placeholder">Click to add text…</span>'
   const clipped = clip(props.data.text, 90)
   const escaped = escapeHtml(clipped)
-  return escaped.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_, name) => {
+  return escaped.replace(/\$([a-zA-Z_][a-zA-Z0-9_]*)\$/g, (_, name) => {
     const known = contextStore.params[name] !== undefined
-    return `<span class="var-token${known ? '' : ' var-unknown'}">{${name}}</span>`
+    return `<span class="var-token${known ? '' : ' var-unknown'}">$${name}$</span>`
   })
 })
 </script>

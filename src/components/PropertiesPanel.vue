@@ -35,11 +35,11 @@
               v-for="(_, name) in contextStore.params"
               :key="name"
               class="var-chip"
-              :title="`Insert {${name}}`"
+              :title="`Insert $${name}$`"
               @click="insertVariable(name)"
-            >{{{ name }}}</button>
+            >{{ '$' + name + '$' }}</button>
           </div>
-          <div class="var-hint">Use <code>{varName}</code> to embed context values in text</div>
+          <div class="var-hint">Use <code>$varName$</code> to embed context values in text</div>
         </div>
       </template>
 
@@ -348,7 +348,7 @@ function insertVariable(name) {
   if (!el) return
   const start = el.selectionStart
   const end = el.selectionEnd
-  const token = `{${name}}`
+  const token = `$${name}$`
   const newText = el.value.slice(0, start) + token + el.value.slice(end)
   patch({ text: newText })
   nextTick(() => {
