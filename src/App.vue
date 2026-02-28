@@ -227,15 +227,24 @@ function handleExportJson() {
 const playModeActive = ref(false)
 const playStoryData  = ref(null)
 
-function handlePlayStory() {
+function openPlayer(startNodeId) {
   const data = exportStory(flowInstance)
   if (!data.nodes?.length) {
     toast('Oynatmak için en az bir node ekleyin.', 'error')
     return
   }
+  if (startNodeId) data.startNodeId = startNodeId
   playStoryData.value = data
   playModeActive.value = true
 }
+
+function handlePlayStory() { openPlayer(null) }
+
+watch(() => uiStore.playFromNodeId, (nodeId) => {
+  if (!nodeId) return
+  uiStore.playFromNodeId = null
+  openPlayer(nodeId)
+})
 
 // ── New story ─────────────────────────────────────────────────────────────────
 function handleNewStory() {

@@ -56,7 +56,8 @@ export function createNodeData(type) {
 export const uiStore = reactive({
   selectedNodeId: null,
   contextPanelOpen: true,
-  storyTitle: 'Untitled Story'
+  storyTitle: 'Untitled Story',
+  playFromNodeId: null   // set by a node to trigger play-from-here
 })
 
 // ── Context parameter store ───────────────────────────────────────────────────
