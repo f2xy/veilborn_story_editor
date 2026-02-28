@@ -140,15 +140,11 @@ function isValidConnection(connection) {
 
 function onConnect(params) {
   // Aynı kaynak handle'dan gelen mevcut kenarları kaldır (her çıkıştan tek bağlantı)
+  // Aynı kaynak handle'dan gelen mevcut kenarı kaldır (her çıkıştan tek bağlantı)
   const dupSource = edges.value.filter(
     e => e.source === params.source && e.sourceHandle === params.sourceHandle
   )
-  // Aynı hedef handle'a gelen mevcut kenarları kaldır (her girişe tek bağlantı)
-  const dupTarget = edges.value.filter(
-    e => e.target === params.target && e.targetHandle === params.targetHandle
-  )
-  const toRemove = [...new Set([...dupSource.map(e => e.id), ...dupTarget.map(e => e.id)])]
-  if (toRemove.length) removeEdges(toRemove)
+  if (dupSource.length) removeEdges(dupSource.map(e => e.id))
 
   addEdges([{
     id: genEdgeId(),
