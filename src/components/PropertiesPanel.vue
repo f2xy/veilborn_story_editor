@@ -36,7 +36,7 @@
               :key="name"
               class="var-chip"
               :title="`Insert $${name}$`"
-              @click="insertVariable(name)"
+              @click="insertVariable(dialogueTextarea, 'text', name)"
             >{{ '$' + name + '$' }}</button>
           </div>
           <div class="var-hint">Use <code>$varName$</code> to embed context values in text</div>
@@ -47,8 +47,20 @@
       <template v-else-if="node.type === 'choice'">
         <div class="form-group">
           <label class="form-label">Prompt</label>
-          <textarea class="input" :value="data.prompt" @input="patch({ prompt: $event.target.value })"
+          <textarea class="input" ref="choicePromptTextarea" :value="data.prompt"
+            @input="patch({ prompt: $event.target.value })"
             placeholder="What is the question / prompt for the player?" style="min-height:56px"></textarea>
+          <div v-if="hasContextParams" class="var-chips">
+            <span class="var-chips-label">Insert variable:</span>
+            <button
+              v-for="(_, name) in contextStore.params"
+              :key="name"
+              class="var-chip"
+              :title="`Insert $${name}$`"
+              @click="insertVariable(choicePromptTextarea, 'prompt', name)"
+            >{{ '$' + name + '$' }}</button>
+          </div>
+          <div class="var-hint">Use <code>$varName$</code> to embed context values in text</div>
         </div>
 
         <div class="form-label" style="margin-bottom:6px">Choices</div>
@@ -339,18 +351,19 @@ const data = computed(() => node.value?.data ?? {})
 
 const operators = ['==', '!=', '>', '<', '>=', '<=']
 
-// ── Dialogue variable interpolation ─────────────────────────────────────────
+// ── Variable interpolation ───────────────────────────────────────────────────
 const dialogueTextarea = ref(null)
+const choicePromptTextarea = ref(null)
 const hasContextParams = computed(() => Object.keys(contextStore.params).length > 0)
 
-function insertVariable(name) {
-  const el = dialogueTextarea.value
+function insertVariable(textareaRef, field, name) {
+  const el = textareaRef?.value ?? textareaRef
   if (!el) return
   const start = el.selectionStart
   const end = el.selectionEnd
   const token = `$${name}$`
   const newText = el.value.slice(0, start) + token + el.value.slice(end)
-  patch({ text: newText })
+  patch({ [field]: newText })
   nextTick(() => {
     el.focus()
     const pos = start + token.length
