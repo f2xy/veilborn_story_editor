@@ -26,8 +26,20 @@
         </div>
         <div class="form-group">
           <label class="form-label">Text</label>
-          <textarea class="input" :value="data.text" @input="patch({ text: $event.target.value })"
+          <textarea class="input" ref="dialogueTextarea" :value="data.text"
+            @input="patch({ text: $event.target.value })"
             placeholder="Enter the dialogue or narration text…"></textarea>
+          <div v-if="hasContextParams" class="var-chips">
+            <span class="var-chips-label">Insert variable:</span>
+            <button
+              v-for="(_, name) in contextStore.params"
+              :key="name"
+              class="var-chip"
+              :title="`Insert {${name}}`"
+              @click="insertVariable(name)"
+            >{{{ name }}}</button>
+          </div>
+          <div class="var-hint">Use <code>{varName}</code> to embed context values in text</div>
         </div>
       </template>
 
@@ -312,7 +324,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { uiStore, contextStore, genChoiceId, genCaseId, FLOW_ID } from '@/store.js'
 
@@ -326,6 +338,25 @@ const node = computed(() => {
 const data = computed(() => node.value?.data ?? {})
 
 const operators = ['==', '!=', '>', '<', '>=', '<=']
+
+// ── Dialogue variable interpolation ─────────────────────────────────────────
+const dialogueTextarea = ref(null)
+const hasContextParams = computed(() => Object.keys(contextStore.params).length > 0)
+
+function insertVariable(name) {
+  const el = dialogueTextarea.value
+  if (!el) return
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  const token = `{${name}}`
+  const newText = el.value.slice(0, start) + token + el.value.slice(end)
+  patch({ text: newText })
+  nextTick(() => {
+    el.focus()
+    const pos = start + token.length
+    el.setSelectionRange(pos, pos)
+  })
+}
 
 const typeLabel = computed(() => {
   const labels = {
@@ -667,5 +698,52 @@ function onOperationChange(op) {
   padding: 12px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+/* Variable interpolation chips */
+.var-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.var-chips-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.var-chip {
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  line-height: 1.4;
+}
+
+.var-chip:hover {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: var(--accent);
+}
+
+.var-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+
+.var-hint code {
+  font-family: monospace;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  padding: 0 3px;
+  border-radius: 3px;
 }
 </style>
