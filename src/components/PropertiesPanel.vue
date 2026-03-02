@@ -41,31 +41,13 @@
           </div>
           <div class="var-hint">Use <code>$varName$</code> to embed context values in text</div>
         </div>
-      </template>
 
-      <!-- ── CHOICE ──────────────────────────────────────────────────── -->
-      <template v-else-if="node.type === 'choice'">
-        <div class="form-group">
-          <label class="form-label">Prompt</label>
-          <textarea class="input" ref="choicePromptTextarea" :value="data.prompt"
-            @input="patch({ prompt: $event.target.value })"
-            placeholder="What is the question / prompt for the player?" style="min-height:56px"></textarea>
-          <div v-if="hasContextParams" class="var-chips">
-            <span class="var-chips-label">Insert variable:</span>
-            <button
-              v-for="(_, name) in contextStore.params"
-              :key="name"
-              class="var-chip"
-              :title="`Insert $${name}$`"
-              @click="insertVariable(choicePromptTextarea, 'prompt', name)"
-            >{{ '$' + name + '$' }}</button>
-          </div>
-          <div class="var-hint">Use <code>$varName$</code> to embed context values in text</div>
+        <div class="section-divider">
+          <span>Choices</span>
+          <span class="section-hint">{{ data.choices?.length ? 'branching mode' : 'linear mode' }}</span>
         </div>
 
-        <div class="form-label" style="margin-bottom:6px">Choices</div>
-
-        <div class="choice-list">
+        <div v-if="data.choices?.length" class="choice-list">
           <div v-for="(choice, i) in data.choices" :key="choice.id" class="choice-editor">
             <div class="choice-editor-header">
               <span class="choice-num">{{ i + 1 }}</span>
@@ -73,7 +55,7 @@
                 @input="updateChoice(i, 'text', $event.target.value)"
                 :placeholder="`Choice ${i + 1} text…`" />
               <button class="btn btn-icon btn-ghost btn-danger" @click="removeChoice(i)"
-                :disabled="data.choices.length <= 1" title="Remove choice">
+                title="Remove choice">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <line x1="18" y1="6" x2="6" y2="18"/>
                   <line x1="6" y1="6" x2="18" y2="18"/>
@@ -106,6 +88,57 @@
                   :value="String(choice.condition.value)"
                   @input="updateChoiceCond(i, 'value', parseCondValue(choice.condition.variable, $event.target.value))"
                   placeholder="value" />
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="action-section">
+              <div class="action-section-header">
+                <span class="action-section-label">On select</span>
+                <button class="btn btn-icon btn-ghost action-add-btn" @click="addChoiceAction(i)" title="Add variable assignment">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Set var
+                </button>
+              </div>
+              <div v-if="choice.actions?.length" class="action-list">
+                <div v-for="(action, ai) in choice.actions" :key="ai" class="action-row">
+                  <select class="input input-sm action-var-select"
+                    :value="action.variable"
+                    @change="updateChoiceAction(i, ai, 'variable', $event.target.value)">
+                    <option value="">— var —</option>
+                    <option v-for="(_, n) in contextStore.params" :key="n" :value="n">{{ n }}</option>
+                  </select>
+                  <select class="input input-sm action-op-select"
+                    :value="action.operation"
+                    @change="updateChoiceAction(i, ai, 'operation', $event.target.value)">
+                    <option value="set">=</option>
+                    <option value="add">+=</option>
+                    <option value="subtract">-=</option>
+                    <option value="multiply">*=</option>
+                    <option value="toggle">!</option>
+                  </select>
+                  <template v-if="action.operation !== 'toggle'">
+                    <select v-if="getParamType(action.variable) === 'boolean' && action.operation === 'set'"
+                      class="input input-sm action-val-input"
+                      :value="String(action.value)"
+                      @change="updateChoiceAction(i, ai, 'value', $event.target.value === 'true')">
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                    <input v-else
+                      class="input input-sm action-val-input"
+                      :value="String(action.value ?? '')"
+                      @input="updateChoiceAction(i, ai, 'value', parseCondValue(action.variable, $event.target.value))"
+                      placeholder="value" />
+                  </template>
+                  <button class="btn btn-icon btn-ghost btn-danger" @click="removeChoiceAction(i, ai)" title="Remove">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -353,28 +386,31 @@ const operators = ['==', '!=', '>', '<', '>=', '<=']
 
 // ── Variable interpolation ───────────────────────────────────────────────────
 const dialogueTextarea = ref(null)
-const choicePromptTextarea = ref(null)
 const hasContextParams = computed(() => Object.keys(contextStore.params).length > 0)
 
 function insertVariable(textareaRef, field, name) {
-  const el = textareaRef?.value ?? textareaRef
-  if (!el) return
-  const start = el.selectionStart
-  const end = el.selectionEnd
   const token = `$${name}$`
-  const newText = el.value.slice(0, start) + token + el.value.slice(end)
-  patch({ [field]: newText })
-  nextTick(() => {
-    el.focus()
-    const pos = start + token.length
-    el.setSelectionRange(pos, pos)
-  })
+  const el = textareaRef?.value ?? null
+
+  if (el && typeof el.value === 'string') {
+    // DOM element is accessible — insert at cursor position
+    const start = el.selectionStart ?? 0
+    const end   = el.selectionEnd   ?? 0
+    const newText = el.value.slice(0, start) + token + el.value.slice(end)
+    patch({ [field]: newText })
+    nextTick(() => {
+      el.focus()
+      el.setSelectionRange(start + token.length, start + token.length)
+    })
+  } else {
+    // Fallback: DOM ref not yet mounted — append to end of reactive value
+    patch({ [field]: (data.value[field] ?? '') + token })
+  }
 }
 
 const typeLabel = computed(() => {
   const labels = {
     dialogue: 'Dialogue',
-    choice: 'Choice',
     condition: 'Condition',
     conditionSwitch: 'Switch',
     setVariable: 'Set Variable'
@@ -385,7 +421,6 @@ const typeLabel = computed(() => {
 const typeColor = computed(() => {
   const colors = {
     dialogue: 'var(--c-dialogue)',
-    choice: 'var(--c-choice)',
     condition: 'var(--c-condition)',
     conditionSwitch: 'var(--c-condswitch)',
     setVariable: 'var(--c-setvar)'
@@ -454,6 +489,31 @@ function updateChoiceCond(index, field, value) {
   const choices = data.value.choices.map((c, i) => {
     if (i !== index || !c.condition) return c
     return { ...c, condition: { ...c.condition, [field]: value } }
+  })
+  patch({ choices })
+}
+
+function addChoiceAction(ci) {
+  const choices = data.value.choices.map((c, i) => {
+    if (i !== ci) return c
+    return { ...c, actions: [...(c.actions || []), { variable: '', operation: 'set', value: '' }] }
+  })
+  patch({ choices })
+}
+
+function removeChoiceAction(ci, ai) {
+  const choices = data.value.choices.map((c, i) => {
+    if (i !== ci) return c
+    return { ...c, actions: (c.actions || []).filter((_, j) => j !== ai) }
+  })
+  patch({ choices })
+}
+
+function updateChoiceAction(ci, ai, field, value) {
+  const choices = data.value.choices.map((c, i) => {
+    if (i !== ci) return c
+    const actions = (c.actions || []).map((a, j) => j === ai ? { ...a, [field]: value } : a)
+    return { ...c, actions }
   })
   patch({ choices })
 }
@@ -595,6 +655,29 @@ function onOperationChange(op) {
   margin-bottom: 12px;
 }
 
+/* Section divider */
+.section-divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin: 10px 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.section-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Choice editor */
 .choice-list { display: flex; flex-direction: column; gap: 8px; }
 
@@ -616,7 +699,7 @@ function onOperationChange(op) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--c-choice);
+  background: var(--c-dialogue);
   color: #fff;
   display: flex;
   align-items: center;
@@ -646,6 +729,51 @@ function onOperationChange(op) {
   border-radius: 5px;
   padding: 7px;
 }
+
+/* Choice actions */
+.action-section { margin-top: 6px; }
+
+.action-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.action-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.action-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 2px 7px;
+  color: #f472b6;
+  border-color: rgba(190,24,93,0.3);
+}
+.action-add-btn:hover { background: rgba(190,24,93,0.12); border-color: rgba(190,24,93,0.5); }
+
+.action-list { display: flex; flex-direction: column; gap: 4px; }
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 6px;
+}
+
+.action-var-select { flex: 1; min-width: 0; }
+.action-op-select  { width: 42px; flex-shrink: 0; text-align: center; }
+.action-val-input  { width: 62px; flex-shrink: 0; }
 
 .cond-row {
   display: flex;

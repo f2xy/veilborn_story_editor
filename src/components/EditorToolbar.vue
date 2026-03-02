@@ -22,16 +22,7 @@
         </svg>
         Dialogue
       </button>
-      <button class="btn node-btn btn-choice" @click="$emit('addNode', 'choice')">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="16 3 21 3 21 8"/>
-          <line x1="4" y1="20" x2="21" y2="3"/>
-          <polyline points="21 16 21 21 16 21"/>
-          <line x1="15" y1="15" x2="21" y2="21"/>
-        </svg>
-        Choice
-      </button>
-      <button class="btn node-btn btn-condition" @click="$emit('addNode', 'condition')">
+<button class="btn node-btn btn-condition" @click="$emit('addNode', 'condition')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
@@ -79,6 +70,15 @@
 
       <div class="separator"></div>
 
+      <button class="btn btn-ai-prompt" @click="downloadPrompt" title="AI ile hikaye yazmak için prompt'u indir">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+        </svg>
+        AI Prompt
+      </button>
+
+      <div class="separator"></div>
+
       <button class="btn btn-ghost" @click="$emit('importJson')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -111,8 +111,19 @@
 
 <script setup>
 import { uiStore } from '@/store.js'
+import { STORY_PROMPT, PROMPT_FILENAME } from '@/storyPrompt.js'
 
 defineEmits(['addNode', 'importJson', 'exportJson', 'newStory', 'playStory'])
+
+function downloadPrompt() {
+  const blob = new Blob([STORY_PROMPT], { type: 'text/plain;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = PROMPT_FILENAME
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
@@ -192,9 +203,6 @@ defineEmits(['addNode', 'importJson', 'exportJson', 'newStory', 'playStory'])
 .btn-dialogue  { color: #818cf8; }
 .btn-dialogue:hover  { background: rgba(79,70,229,0.2); border-color: rgba(79,70,229,0.5); }
 
-.btn-choice    { color: #2dd4bf; }
-.btn-choice:hover    { background: rgba(13,148,136,0.2); border-color: rgba(13,148,136,0.5); }
-
 .btn-condition { color: #fbbf24; }
 .btn-condition:hover  { background: rgba(180,83,9,0.2); border-color: rgba(180,83,9,0.5); }
 
@@ -229,6 +237,37 @@ defineEmits(['addNode', 'importJson', 'exportJson', 'newStory', 'playStory'])
 .btn-play:hover {
   background: rgba(74, 222, 128, 0.22);
   border-color: rgba(74, 222, 128, 0.6);
+}
+
+.btn-ai-prompt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(124, 110, 245, 0.08);
+  border: 1px solid rgba(124, 110, 245, 0.3);
+  border-radius: 5px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-ai-prompt:hover {
+  background: rgba(124, 110, 245, 0.18);
+  border-color: rgba(124, 110, 245, 0.6);
+  color: var(--accent-hover);
+}
+.btn-ai-prompt svg {
+  flex-shrink: 0;
+  fill: rgba(124, 110, 245, 0.5);
+  stroke: var(--accent);
+  transition: fill 0.15s;
+}
+.btn-ai-prompt:hover svg {
+  fill: rgba(124, 110, 245, 0.25);
 }
 
 .separator {

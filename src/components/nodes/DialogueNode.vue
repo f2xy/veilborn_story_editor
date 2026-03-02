@@ -21,9 +21,33 @@
     <div class="node-body">
       <div v-if="data.character" class="node-char">{{ data.character }}</div>
       <div class="node-preview" :class="{ empty: !data.text }" v-html="previewHtml"></div>
+
+      <div v-if="data.choices?.length" class="choices">
+        <div
+          v-for="(choice, i) in data.choices"
+          :key="choice.id"
+          class="choice-row"
+        >
+          <span class="choice-idx">{{ i + 1 }}</span>
+          <span class="choice-text">{{ choice.text || '…' }}</span>
+          <span v-if="choice.condition" class="badge-cond">if</span>
+          <span v-if="choice.actions?.length" class="badge-action">⚙{{ choice.actions.length }}</span>
+        </div>
+      </div>
     </div>
 
-    <Handle type="source" :position="Position.Bottom" id="output" />
+    <!-- Linear mode: single output at bottom -->
+    <Handle v-if="!data.choices?.length" type="source" :position="Position.Bottom" id="output" />
+
+    <!-- Branching mode: one handle per choice on the right -->
+    <Handle
+      v-for="(choice, i) in data.choices"
+      :key="`h-${choice.id}`"
+      type="source"
+      :position="Position.Right"
+      :id="`choice-${choice.id}`"
+      :style="choiceHandleStyle(i, data.choices.length)"
+    />
   </div>
 </template>
 
@@ -59,6 +83,11 @@ const previewHtml = computed(() => {
     return `<span class="var-token${known ? '' : ' var-unknown'}">$${name}$</span>`
   })
 })
+
+function choiceHandleStyle(index, total) {
+  const pct = ((index + 1) / (total + 1)) * 100
+  return { top: `${pct}%`, right: '-6px', transform: 'translateY(-50%)' }
+}
 </script>
 
 <style scoped>
@@ -108,5 +137,59 @@ const previewHtml = computed(() => {
 .var-unknown {
   color: #f87171;
   background: rgba(248, 113, 113, 0.12);
+}
+
+.choices { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.choice-idx {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--c-dialogue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.choice-text {
+  flex: 1;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge-cond {
+  font-size: 9px;
+  padding: 1px 4px;
+  background: rgba(180,83,9,0.3);
+  color: #fbbf24;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.badge-action {
+  font-size: 9px;
+  padding: 1px 4px;
+  background: rgba(190,24,93,0.25);
+  color: #f472b6;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
 </style>

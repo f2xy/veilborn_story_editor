@@ -83,7 +83,6 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import StoryPlayer from '@/components/StoryPlayer.vue'
 
 import DialogueNode from '@/components/nodes/DialogueNode.vue'
-import ChoiceNode from '@/components/nodes/ChoiceNode.vue'
 import ConditionNode from '@/components/nodes/ConditionNode.vue'
 import ConditionSwitchNode from '@/components/nodes/ConditionSwitchNode.vue'
 import SetVariableNode from '@/components/nodes/SetVariableNode.vue'
@@ -93,7 +92,6 @@ import { FLOW_ID, uiStore, contextStore, genNodeId, genEdgeId, createNodeData, l
 // ── Node type registry ────────────────────────────────────────────────────────
 const nodeTypes = {
   dialogue:        markRaw(DialogueNode),
-  choice:          markRaw(ChoiceNode),
   condition:       markRaw(ConditionNode),
   conditionSwitch: markRaw(ConditionSwitchNode),
   setVariable:     markRaw(SetVariableNode)
@@ -179,7 +177,6 @@ function onNodesChange(changes) {
 function minimapNodeColor(node) {
   const colors = {
     dialogue:        '#4f46e5',
-    choice:          '#0d9488',
     condition:       '#b45309',
     conditionSwitch: '#6d28d9',
     setVariable:     '#be185d'

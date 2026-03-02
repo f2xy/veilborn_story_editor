@@ -21,15 +21,7 @@ export function genEdgeId() {
 export function createNodeData(type) {
   switch (type) {
     case 'dialogue':
-      return { character: '', text: '' }
-    case 'choice':
-      return {
-        prompt: '',
-        choices: [
-          { id: genChoiceId(), text: '', condition: null },
-          { id: genChoiceId(), text: '', condition: null }
-        ]
-      }
+      return { character: '', text: '', choices: [] }
     case 'condition':
       return {
         logic: 'single',   // 'single' | 'and' | 'or'
@@ -112,7 +104,21 @@ export function loadStory(json, flowInstance) {
   // Inject edges with smoothstep type
   const enrichedEdges = (edges || []).map(e => ({ ...e, type: 'smoothstep' }))
 
-  flowInstance.setNodes(nodes || [])
+  // Migrate legacy 'choice' nodes to 'dialogue' nodes
+  const migratedNodes = (nodes || []).map(n => {
+    if (n.type !== 'choice') return n
+    return {
+      ...n,
+      type: 'dialogue',
+      data: {
+        character: '',
+        text: n.data?.prompt || '',
+        choices: n.data?.choices || []
+      }
+    }
+  })
+
+  flowInstance.setNodes(migratedNodes)
   flowInstance.setEdges(enrichedEdges)
 }
 

@@ -64,19 +64,13 @@
             </div>
             <div class="dialogue-text" v-html="renderedText"></div>
           </div>
-
-          <!-- Choice -->
-          <div v-else-if="currentNode?.type === 'choice'" class="choice-box">
-            <p v-if="currentNode.data.prompt" class="choice-prompt" v-html="renderedPrompt"></p>
-            <p v-else class="choice-prompt empty">Ne yapmak istersin?</p>
-          </div>
         </template>
       </div>
 
       <!-- Footer actions -->
       <div class="player-footer" v-if="phase === 'playing' && story.nodes?.length">
-        <!-- Choice buttons -->
-        <template v-if="currentNode?.type === 'choice'">
+        <!-- Choice buttons (dialogue with choices → branching mode) -->
+        <template v-if="currentNode?.type === 'dialogue' && currentNode.data.choices?.length">
           <div class="choices-list">
             <button
               v-for="ch in visibleChoices"
@@ -95,9 +89,9 @@
           </div>
         </template>
 
-        <!-- Continue button for dialogue -->
+        <!-- Continue button (dialogue without choices → linear mode) -->
         <button
-          v-else-if="currentNode?.type === 'dialogue'"
+          v-else-if="currentNode?.type === 'dialogue' && !currentNode.data.choices?.length"
           class="continue-btn"
           @click="advance"
         >
@@ -210,6 +204,12 @@ function advance() {
 
 function pickChoice(choice) {
   stepLog.value = []
+  // Execute inline variable assignments attached to this choice
+  for (const action of (choice.actions || [])) {
+    if (!action.variable || !action.operation) continue
+    const desc = execSetVar(action)
+    stepLog.value.push({ kind: 'setvar', icon: '⚙', text: `Seçenek etkisi: ${desc}` })
+  }
   const next = edgesBySource[`${currentId.value}__choice-${choice.id}`]
   if (!next) { endStory(`"${choice.text}" seçeneğinden sonra bağlantı bulunamadı.`); return }
   navigate(next)
@@ -227,7 +227,7 @@ function restart() {
 const currentNode = computed(() => currentId.value ? nodesById[currentId.value] : null)
 
 const visibleChoices = computed(() => {
-  if (currentNode.value?.type !== 'choice') return []
+  if (currentNode.value?.type !== 'dialogue') return []
   return (currentNode.value.data.choices || []).filter(ch => {
     if (!ch.condition) return true
     return evalSingleCond(ch.condition)
@@ -245,8 +245,7 @@ function renderVars(raw) {
   })
 }
 
-const renderedText   = computed(() => renderVars(currentNode.value?.data?.text))
-const renderedPrompt = computed(() => renderVars(currentNode.value?.data?.prompt))
+const renderedText = computed(() => renderVars(currentNode.value?.data?.text))
 
 // ── Condition evaluation ──────────────────────────────────────────────────────
 function evalSingleCond(cond) {
@@ -626,12 +625,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   transition: all 0.15s;
 }
 .choice-btn:hover {
-  background: rgba(13,148,136,0.12);
-  border-color: rgba(13,148,136,0.5);
-  color: #2dd4bf;
+  background: rgba(79,70,229,0.12);
+  border-color: rgba(79,70,229,0.5);
+  color: #818cf8;
 }
 .choice-btn svg { color: var(--text-muted); flex-shrink: 0; transition: color 0.15s; }
-.choice-btn:hover svg { color: #2dd4bf; }
+.choice-btn:hover svg { color: #818cf8; }
 
 .no-choices {
   font-size: 12px;
