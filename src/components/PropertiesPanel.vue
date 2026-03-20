@@ -350,6 +350,40 @@
           <span class="cv2">{{ data.operation === 'toggle' ? '!' + (data.variable || '?') : (data.value !== undefined && data.value !== '' ? String(data.value) : '?') }}</span>
         </div>
       </template>
+
+      <!-- ── STORY JUMP ───────────────────────────────────────────────── -->
+      <template v-else-if="node.type === 'storyJump'">
+        <div class="form-group">
+          <label class="form-label">Target Scene</label>
+          <select class="input" :value="data.targetStoryId"
+            @change="patch({ targetStoryId: $event.target.value })">
+            <option value="">— select scene —</option>
+            <option
+              v-for="s in availableTargetStories"
+              :key="s.id"
+              :value="s.id"
+            >{{ s.title }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Label (optional)</label>
+          <input class="input" :value="data.label"
+            @input="patch({ label: $event.target.value })"
+            placeholder="e.g. Enter the dark path…" />
+        </div>
+        <div v-if="data.targetStoryId && jumpTargetTitle" class="jump-preview-box">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14"/>
+            <path d="m12 5 7 7-7 7"/>
+          </svg>
+          <span>Jumps to: <strong>{{ jumpTargetTitle }}</strong></span>
+        </div>
+        <div class="branch-info" style="margin-top:10px">
+          <div class="bi" style="color: var(--c-storyjump)">
+            This node is a terminal — the flow continues in the target scene.
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Delete node -->
@@ -371,7 +405,7 @@
 <script setup>
 import { computed, ref, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
-import { uiStore, contextStore, genChoiceId, genCaseId, FLOW_ID } from '@/store.js'
+import { uiStore, contextStore, storiesStore, genChoiceId, genCaseId, FLOW_ID } from '@/store.js'
 
 const { findNode, updateNode, removeNodes, removeEdges, getEdges } = useVueFlow(FLOW_ID)
 
@@ -413,7 +447,8 @@ const typeLabel = computed(() => {
     dialogue: 'Dialogue',
     condition: 'Condition',
     conditionSwitch: 'Switch',
-    setVariable: 'Set Variable'
+    setVariable: 'Set Variable',
+    storyJump: 'Story Jump'
   }
   return labels[node.value?.type] ?? node.value?.type
 })
@@ -423,10 +458,20 @@ const typeColor = computed(() => {
     dialogue: 'var(--c-dialogue)',
     condition: 'var(--c-condition)',
     conditionSwitch: 'var(--c-condswitch)',
-    setVariable: 'var(--c-setvar)'
+    setVariable: 'var(--c-setvar)',
+    storyJump: 'var(--c-storyjump)'
   }
   return colors[node.value?.type] ?? 'var(--accent)'
 })
+
+// ── Story Jump helpers ───────────────────────────────────────────────────────
+const availableTargetStories = computed(() =>
+  storiesStore.stories.filter(s => s.id !== storiesStore.activeStoryId)
+)
+
+const jumpTargetTitle = computed(() =>
+  storiesStore.stories.find(s => s.id === data.value?.targetStoryId)?.title ?? ''
+)
 
 // For setVariable
 const selectedParamType = computed(() => {
@@ -887,4 +932,20 @@ function onOperationChange(op) {
   padding: 0 3px;
   border-radius: 3px;
 }
+
+/* Story Jump preview */
+.jump-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--c-storyjump) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-storyjump) 35%, transparent);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.jump-preview-box svg { color: var(--c-storyjump); flex-shrink: 0; }
+.jump-preview-box strong { color: var(--text-primary); }
 </style>

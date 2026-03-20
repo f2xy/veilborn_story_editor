@@ -46,6 +46,14 @@
         </svg>
         Set Variable
       </button>
+      <button class="btn node-btn btn-storyjump" @click="$emit('addNode', 'storyJump')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M5 12h14"/>
+          <path d="m12 5 7 7-7 7"/>
+          <rect x="2" y="3" width="5" height="18" rx="1"/>
+        </svg>
+        Jump
+      </button>
     </div>
 
     <!-- Right actions -->
@@ -58,6 +66,14 @@
       </button>
 
       <div class="separator"></div>
+
+      <button class="btn btn-ghost" title="Toggle scenes panel" @click="uiStore.storiesPanelOpen = !uiStore.storiesPanelOpen">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        Scenes
+      </button>
 
       <button class="btn btn-ghost" title="Toggle context panel" @click="uiStore.contextPanelOpen = !uiStore.contextPanelOpen">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -211,6 +227,9 @@ function downloadPrompt() {
 
 .btn-setvar    { color: #f472b6; }
 .btn-setvar:hover    { background: rgba(190,24,93,0.2); border-color: rgba(190,24,93,0.5); }
+
+.btn-storyjump { color: #22d3ee; }
+.btn-storyjump:hover { background: rgba(14,116,144,0.2); border-color: rgba(14,116,144,0.5); }
 
 .toolbar-actions {
   display: flex;
