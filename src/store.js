@@ -16,6 +16,9 @@ export function genCaseId() {
 export function genEdgeId() {
   return `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 }
+export function genStoryId() {
+  return `story_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+}
 
 // ── Default node data per type ────────────────────────────────────────────────
 export function createNodeData(type) {
@@ -39,6 +42,8 @@ export function createNodeData(type) {
       }
     case 'setVariable':
       return { variable: '', operation: 'set', value: '' }
+    case 'storyJump':
+      return { targetStoryId: '', targetNodeId: '', label: '' }
     default:
       return {}
   }
@@ -48,6 +53,7 @@ export function createNodeData(type) {
 export const uiStore = reactive({
   selectedNodeId: null,
   contextPanelOpen: true,
+  storiesPanelOpen: true,
   storyTitle: 'Untitled Story',
   playFromNodeId: null   // set by a node to trigger play-from-here
 })
@@ -83,17 +89,66 @@ export function updateContextParamType(name, type) {
   }
 }
 
+// ── Stories store ─────────────────────────────────────────────────────────────
+// Each story is: { id, title, nodes: [], edges: [] }
+// The active story's nodes/edges are in VueFlow; storiesStore holds snapshots
+// of non-active stories plus the last-saved snapshot of the active story.
+
+const _initialStoryId = genStoryId()
+
+export const storiesStore = reactive({
+  stories: [
+    { id: _initialStoryId, title: 'Main Story', nodes: [], edges: [] }
+  ],
+  activeStoryId: _initialStoryId
+})
+
+export function createStory(title = 'New Scene') {
+  const id = genStoryId()
+  storiesStore.stories.push({ id, title, nodes: [], edges: [] })
+  return id
+}
+
+export function deleteStory(id) {
+  const idx = storiesStore.stories.findIndex(s => s.id === id)
+  if (idx < 0 || storiesStore.stories.length <= 1) return null
+  const wasActive = storiesStore.activeStoryId === id
+  storiesStore.stories.splice(idx, 1)
+  if (wasActive) {
+    const nextIdx = Math.min(idx, storiesStore.stories.length - 1)
+    return storiesStore.stories[nextIdx].id
+  }
+  return null
+}
+
+export function renameStory(id, title) {
+  const story = storiesStore.stories.find(s => s.id === id)
+  if (story) story.title = title
+}
+
+// ── Node migration helper ─────────────────────────────────────────────────────
+function _migrateNode(n) {
+  if (n.type !== 'choice') return n
+  return {
+    ...n,
+    type: 'dialogue',
+    data: {
+      character: '',
+      text: n.data?.prompt || '',
+      choices: n.data?.choices || []
+    }
+  }
+}
+
 // ── Load / Export ─────────────────────────────────────────────────────────────
 export function loadStory(json, flowInstance) {
-  const { nodes, edges, context, title } = json
-
-  uiStore.storyTitle = title || 'Untitled Story'
   uiStore.selectedNodeId = null
+  uiStore.storyTitle = json.title || 'Untitled Story'
 
   // Rebuild context
   contextStore.params = {}
-  if (context) {
-    Object.entries(context).forEach(([k, v]) => {
+  if (json.context) {
+    Object.entries(json.context).forEach(([k, v]) => {
       contextStore.params[k] = { ...v }
     })
   }
@@ -101,47 +156,79 @@ export function loadStory(json, flowInstance) {
   // Reset node counter to avoid collisions
   _counter = 200_000
 
-  // Inject edges with smoothstep type
-  const enrichedEdges = (edges || []).map(e => ({ ...e, type: 'smoothstep' }))
+  if (json.version === '2.0' && Array.isArray(json.stories)) {
+    // ── Multi-story format ────────────────────────────────────────────────────
+    storiesStore.stories = json.stories.map(s => ({
+      id: s.id,
+      title: s.title || 'Untitled Scene',
+      nodes: (s.nodes || []).map(_migrateNode),
+      edges: (s.edges || []).map(e => ({ ...e, type: 'smoothstep' }))
+    }))
 
-  // Migrate legacy 'choice' nodes to 'dialogue' nodes
-  const migratedNodes = (nodes || []).map(n => {
-    if (n.type !== 'choice') return n
-    return {
-      ...n,
-      type: 'dialogue',
-      data: {
-        character: '',
-        text: n.data?.prompt || '',
-        choices: n.data?.choices || []
-      }
-    }
-  })
+    const activeId = (json.activeStoryId && storiesStore.stories.find(s => s.id === json.activeStoryId))
+      ? json.activeStoryId
+      : storiesStore.stories[0]?.id
 
-  flowInstance.setNodes(migratedNodes)
-  flowInstance.setEdges(enrichedEdges)
+    storiesStore.activeStoryId = activeId
+
+    const active = storiesStore.stories.find(s => s.id === activeId)
+    flowInstance.setNodes(active?.nodes || [])
+    flowInstance.setEdges(active?.edges || [])
+
+  } else {
+    // ── Legacy v1.0 — wrap as a single story ─────────────────────────────────
+    const nodes = (json.nodes || []).map(_migrateNode)
+    const edges = (json.edges || []).map(e => ({ ...e, type: 'smoothstep' }))
+    const id = genStoryId()
+
+    storiesStore.stories = [{ id, title: json.title || 'Main Story', nodes, edges }]
+    storiesStore.activeStoryId = id
+
+    flowInstance.setNodes(nodes)
+    flowInstance.setEdges(edges)
+  }
 }
 
 export function exportStory(flowInstance) {
   const { nodes: flowNodes, edges: flowEdges } = flowInstance
 
+  const stories = storiesStore.stories.map(s => {
+    if (s.id === storiesStore.activeStoryId) {
+      // Use live VueFlow data for the active story
+      return {
+        id: s.id,
+        title: s.title,
+        startNodeId: flowNodes.value?.[0]?.id ?? null,
+        nodes: (flowNodes.value || []).map(n => ({
+          id: n.id,
+          type: n.type,
+          position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+          data: n.data
+        })),
+        edges: (flowEdges.value || []).map(e => ({
+          id: e.id,
+          source: e.source,
+          sourceHandle: e.sourceHandle,
+          target: e.target,
+          targetHandle: e.targetHandle
+        }))
+      }
+    }
+    // Non-active stories use their stored snapshot
+    return {
+      id: s.id,
+      title: s.title,
+      startNodeId: s.nodes[0]?.id ?? null,
+      nodes: s.nodes,
+      edges: s.edges
+    }
+  })
+
   return {
-    version: '1.0',
+    version: '2.0',
     title: uiStore.storyTitle,
-    startNodeId: flowNodes.value?.[0]?.id ?? null,
+    activeStoryId: storiesStore.activeStoryId,
     context: JSON.parse(JSON.stringify(contextStore.params)),
-    nodes: (flowNodes.value || []).map(n => ({
-      id: n.id,
-      type: n.type,
-      position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
-      data: n.data
-    })),
-    edges: (flowEdges.value || []).map(e => ({
-      id: e.id,
-      source: e.source,
-      sourceHandle: e.sourceHandle,
-      target: e.target,
-      targetHandle: e.targetHandle
-    }))
+    stories
   }
 }

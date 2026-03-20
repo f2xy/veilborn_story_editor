@@ -28,7 +28,7 @@
       <div class="player-body">
 
         <!-- Empty story -->
-        <div v-if="!story.nodes?.length" class="player-state">
+        <div v-if="!allNodes.length" class="player-state">
           <p class="state-icon">⬡</p>
           <p class="state-title">Hikaye boş</p>
           <p class="state-msg">Önce editörde node'lar ekleyin.</p>
@@ -44,7 +44,7 @@
 
         <!-- Active step -->
         <template v-else>
-          <!-- Auto-processing log (condition / setVar etc.) -->
+          <!-- Auto-processing log (condition / setVar / jump etc.) -->
           <div v-if="stepLog.length" class="step-log">
             <div
               v-for="(entry, i) in stepLog"
@@ -68,7 +68,7 @@
       </div>
 
       <!-- Footer actions -->
-      <div class="player-footer" v-if="phase === 'playing' && story.nodes?.length">
+      <div class="player-footer" v-if="phase === 'playing' && allNodes.length">
         <!-- Choice buttons (dialogue with choices → branching mode) -->
         <template v-if="currentNode?.type === 'dialogue' && currentNode.data.choices?.length">
           <div class="choices-list">
@@ -125,16 +125,34 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-// ── Lookup maps ───────────────────────────────────────────────────────────────
-const nodesById = Object.fromEntries(
-  (props.story.nodes || []).map(n => [n.id, n])
-)
+// ── Build unified lookup maps from all stories (v2.0) or single story (v1.0) ──
+const isV2 = props.story.version === '2.0'
+
+const allNodes = isV2
+  ? (props.story.stories || []).flatMap(s => s.nodes || [])
+  : (props.story.nodes || [])
+
+const allEdges = isV2
+  ? (props.story.stories || []).flatMap(s => s.edges || [])
+  : (props.story.edges || [])
+
+const nodesById = Object.fromEntries(allNodes.map(n => [n.id, n]))
 
 // edgesBySource: `nodeId__handleId` → targetNodeId
 const edgesBySource = {}
-for (const e of (props.story.edges || [])) {
+for (const e of allEdges) {
   edgesBySource[`${e.source}__${e.sourceHandle}`] = e.target
 }
+
+// Resolve the starting node for the active/main story
+const startNodeId = (() => {
+  if (isV2) {
+    const active = (props.story.stories || []).find(s => s.id === props.story.activeStoryId)
+      ?? props.story.stories?.[0]
+    return active?.startNodeId ?? active?.nodes?.[0]?.id ?? null
+  }
+  return props.story.startNodeId ?? props.story.nodes?.[0]?.id ?? null
+})()
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 const context    = ref(buildInitialContext())
@@ -184,8 +202,24 @@ function navigate(nodeId, depth = 0) {
     const desc = execSetVar(node.data)
     stepLog.value.push({ kind: 'setvar', icon: '⚙', text: `Değişken: ${desc}` })
     navigate(edgesBySource[`${nodeId}__output`], depth + 1)
+
+  } else if (node.type === 'storyJump') {
+    const targetId = node.data.targetStoryId
+    const targetStory = isV2
+      ? (props.story.stories || []).find(s => s.id === targetId)
+      : null
+    const storyTitle = targetStory?.title ?? 'Bilinmeyen Sahne'
+    // Use explicitly specified targetNodeId first, then story startNodeId, then first node
+    const targetNode = node.data.targetNodeId
+      || targetStory?.startNodeId
+      || targetStory?.nodes?.[0]?.id
+      || null
+    const logDetail = node.data.targetNodeId ? ` → ${node.data.targetNodeId.slice(0, 20)}` : ''
+    stepLog.value.push({ kind: 'jump', icon: '↪', text: `Sahneye geçildi: ${storyTitle}${logDetail}` })
+    if (!targetNode) { endStory(`Hedef sahne bulunamadı: ${storyTitle}`); return }
+    navigate(targetNode, depth + 1)
   }
-  // dialogue and choice: stay here, await user input
+  // dialogue: stay here, await user input
 }
 
 function endStory(msg) {
@@ -220,7 +254,7 @@ function restart() {
   stepLog.value  = []
   phase.value    = 'playing'
   endMessage.value = ''
-  navigate(props.story.startNodeId || props.story.nodes?.[0]?.id)
+  navigate(startNodeId)
 }
 
 // ── Computed helpers ──────────────────────────────────────────────────────────
@@ -341,7 +375,7 @@ function onKey(e) {
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey)
-  navigate(props.story.startNodeId || props.story.nodes?.[0]?.id)
+  navigate(startNodeId)
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
@@ -531,6 +565,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   color: #f472b6;
 }
 
+.log-entry.jump {
+  background: rgba(14,116,144,0.12);
+  border-color: rgba(14,116,144,0.35);
+  color: #22d3ee;
+}
+
 .log-icon { flex-shrink: 0; font-size: 12px; }
 .log-text { color: inherit; }
 
@@ -567,18 +607,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   color: #f87171;
   text-decoration: underline dotted;
 }
-
-/* ── Choice ── */
-.choice-box { }
-
-.choice-prompt {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.choice-prompt.empty { color: var(--text-muted); font-style: italic; }
 
 /* ── Footer ── */
 .player-footer {

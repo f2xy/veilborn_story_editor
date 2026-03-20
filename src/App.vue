@@ -9,6 +9,12 @@
     />
 
     <div class="editor-body">
+      <StoriesPanel
+        @switchTo="switchStory"
+        @createStory="handleCreateStory"
+        @deleteStory="handleDeleteStory"
+      />
+
       <ContextPanel />
 
       <!-- Canvas -->
@@ -34,6 +40,15 @@
             :masked-color="'#0b0b16'"
           />
         </VueFlow>
+
+        <!-- Scene name badge -->
+        <div class="scene-badge">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+          {{ activeStoryTitle }}
+        </div>
 
         <!-- Auto-save indicator -->
         <div class="autosave-badge" :class="{ visible: autosaveVisible }">
@@ -71,7 +86,7 @@
 </template>
 
 <script setup>
-import { ref, markRaw, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, markRaw, watch, nextTick, onMounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background, BackgroundVariant } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -80,26 +95,40 @@ import { MiniMap } from '@vue-flow/minimap'
 import EditorToolbar from '@/components/EditorToolbar.vue'
 import ContextPanel from '@/components/ContextPanel.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
+import StoriesPanel from '@/components/StoriesPanel.vue'
 import StoryPlayer from '@/components/StoryPlayer.vue'
 
 import DialogueNode from '@/components/nodes/DialogueNode.vue'
 import ConditionNode from '@/components/nodes/ConditionNode.vue'
 import ConditionSwitchNode from '@/components/nodes/ConditionSwitchNode.vue'
 import SetVariableNode from '@/components/nodes/SetVariableNode.vue'
+import StoryJumpNode from '@/components/nodes/StoryJumpNode.vue'
 
-import { FLOW_ID, uiStore, contextStore, genNodeId, genEdgeId, createNodeData, loadStory, exportStory } from '@/store.js'
+import {
+  FLOW_ID,
+  uiStore, contextStore, storiesStore,
+  genNodeId, genEdgeId, createNodeData,
+  createStory, deleteStory,
+  loadStory, exportStory
+} from '@/store.js'
 
 // ── Node type registry ────────────────────────────────────────────────────────
 const nodeTypes = {
   dialogue:        markRaw(DialogueNode),
   condition:       markRaw(ConditionNode),
   conditionSwitch: markRaw(ConditionSwitchNode),
-  setVariable:     markRaw(SetVariableNode)
+  setVariable:     markRaw(SetVariableNode),
+  storyJump:       markRaw(StoryJumpNode)
 }
 
 // ── VueFlow instance ──────────────────────────────────────────────────────────
 const flowInstance = useVueFlow(FLOW_ID)
-const { addNodes, addEdges, removeEdges, getViewport, removeNodes, nodes, edges } = flowInstance
+const { addNodes, addEdges, removeEdges, getViewport, removeNodes, nodes, edges, setNodes, setEdges } = flowInstance
+
+// ── Active story info ─────────────────────────────────────────────────────────
+const activeStoryTitle = computed(() =>
+  storiesStore.stories.find(s => s.id === storiesStore.activeStoryId)?.title ?? ''
+)
 
 // ── Node placement ────────────────────────────────────────────────────────────
 function viewportCenter() {
@@ -133,11 +162,6 @@ function onPaneClick() {
 }
 
 // ── Connection ────────────────────────────────────────────────────────────────
-
-// Geçerli bağlantı kuralları:
-//   - Bir node kendi kendine bağlanamaz
-//   - Hedef handle daima "input" adını taşır; source → target yönü zorunlu
-//   - "input" handle'ından (giriş noktasından) bağlantı başlatılamaz
 function isValidConnection(connection) {
   if (connection.source === connection.target) return false
   if (connection.targetHandle !== 'input') return false
@@ -146,8 +170,6 @@ function isValidConnection(connection) {
 }
 
 function onConnect(params) {
-  // Aynı kaynak handle'dan gelen mevcut kenarları kaldır (her çıkıştan tek bağlantı)
-  // Aynı kaynak handle'dan gelen mevcut kenarı kaldır (her çıkıştan tek bağlantı)
   const dupSource = edges.value.filter(
     e => e.source === params.source && e.sourceHandle === params.sourceHandle
   )
@@ -163,7 +185,7 @@ function onConnect(params) {
   }])
 }
 
-// ── Track node removals (via Delete key) ─────────────────────────────────────
+// ── Track node removals (via Delete key) ──────────────────────────────────────
 function onNodesChange(changes) {
   for (const c of changes) {
     if (c.type === 'remove' && c.id === uiStore.selectedNodeId) {
@@ -179,9 +201,78 @@ function minimapNodeColor(node) {
     dialogue:        '#4f46e5',
     condition:       '#b45309',
     conditionSwitch: '#6d28d9',
-    setVariable:     '#be185d'
+    setVariable:     '#be185d',
+    storyJump:       '#0e7490'
   }
   return colors[node.type] ?? '#6c5ce7'
+}
+
+// ── Story switching ───────────────────────────────────────────────────────────
+// Save current VueFlow canvas into storiesStore, then load the new story.
+async function switchStory(newStoryId) {
+  if (newStoryId === storiesStore.activeStoryId) return
+
+  _suppressSave = true
+
+  // Snapshot current story's canvas into storiesStore
+  const currentIdx = storiesStore.stories.findIndex(s => s.id === storiesStore.activeStoryId)
+  if (currentIdx >= 0) {
+    storiesStore.stories[currentIdx] = {
+      ...storiesStore.stories[currentIdx],
+      nodes: nodes.value.map(n => ({
+        id: n.id,
+        type: n.type,
+        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        data: JSON.parse(JSON.stringify(n.data))
+      })),
+      edges: edges.value.map(e => ({
+        id: e.id,
+        source: e.source,
+        sourceHandle: e.sourceHandle,
+        target: e.target,
+        targetHandle: e.targetHandle
+      }))
+    }
+  }
+
+  uiStore.selectedNodeId = null
+  storiesStore.activeStoryId = newStoryId
+
+  const newStory = storiesStore.stories.find(s => s.id === newStoryId)
+  setNodes(newStory?.nodes ?? [])
+  setEdges((newStory?.edges ?? []).map(e => ({ ...e, type: 'smoothstep' })))
+
+  await nextTick()
+  _suppressSave = false
+  scheduleSave()
+}
+
+// ── Story create ──────────────────────────────────────────────────────────────
+function handleCreateStory() {
+  const newId = createStory()
+  switchStory(newId)
+}
+
+// ── Story delete ──────────────────────────────────────────────────────────────
+async function handleDeleteStory(id) {
+  if (storiesStore.stories.length <= 1) return
+
+  _suppressSave = true
+
+  const wasActive = storiesStore.activeStoryId === id
+  const nextId = deleteStory(id)   // removes from storiesStore.stories
+
+  if (wasActive && nextId) {
+    uiStore.selectedNodeId = null
+    storiesStore.activeStoryId = nextId
+    const story = storiesStore.stories.find(s => s.id === nextId)
+    setNodes(story?.nodes ?? [])
+    setEdges((story?.edges ?? []).map(e => ({ ...e, type: 'smoothstep' })))
+  }
+
+  await nextTick()
+  _suppressSave = false
+  scheduleSave()
 }
 
 // ── Import JSON ───────────────────────────────────────────────────────────────
@@ -197,9 +288,12 @@ async function onFileSelected(event) {
   try {
     const text = await file.text()
     const json = JSON.parse(text)
+    _suppressSave = true
     loadStory(json, flowInstance)
+    _suppressSave = false
     toast('Story imported successfully.', 'success')
   } catch (e) {
+    _suppressSave = false
     toast('Failed to parse JSON: ' + e.message, 'error')
   }
   event.target.value = ''
@@ -226,11 +320,16 @@ const playStoryData  = ref(null)
 
 function openPlayer(startNodeId) {
   const data = exportStory(flowInstance)
-  if (!data.nodes?.length) {
+  const activeStory = data.stories?.find(s => s.id === data.activeStoryId)
+  if (!activeStory?.nodes?.length) {
     toast('Oynatmak için en az bir node ekleyin.', 'error')
     return
   }
-  if (startNodeId) data.startNodeId = startNodeId
+  if (startNodeId) {
+    data.stories = data.stories.map(s =>
+      s.id === data.activeStoryId ? { ...s, startNodeId } : s
+    )
+  }
   playStoryData.value = data
   playModeActive.value = true
 }
@@ -246,7 +345,9 @@ watch(() => uiStore.playFromNodeId, (nodeId) => {
 // ── New story ─────────────────────────────────────────────────────────────────
 function handleNewStory() {
   if (!confirm('Start a new story? All unsaved work will be lost.')) return
+  _suppressSave = true
   loadStory({ nodes: [], edges: [], context: {}, title: 'Untitled Story' }, flowInstance)
+  _suppressSave = false
   localStorage.removeItem(AUTOSAVE_KEY)
   toast('New story created.', 'success')
 }
@@ -256,7 +357,7 @@ const AUTOSAVE_KEY = 'veilborn_autosave'
 const autosaveVisible = ref(false)
 let saveTimer = null
 let autosaveBadgeTimer = null
-let _suppressSave = false   // prevents spurious save during initial load
+let _suppressSave = false   // prevents spurious saves during load/switch
 
 function scheduleSave() {
   if (_suppressSave) return
@@ -280,8 +381,10 @@ function showAutosaveBadge() {
 watch(nodes, scheduleSave, { deep: true })
 watch(() => uiStore.storyTitle, scheduleSave)
 watch(() => contextStore.params, scheduleSave, { deep: true })
+watch(() => storiesStore.stories.map(s => s.title).join('|'), scheduleSave)   // story renames
+watch(() => storiesStore.stories.length, scheduleSave)                         // add / remove story
 
-// ── Restore from localStorage on mount ───────────────────────────────────────
+// ── Restore from localStorage on mount ────────────────────────────────────────
 onMounted(() => {
   nextTick(() => {
     setTimeout(() => {
@@ -335,10 +438,36 @@ function toast(message, type = 'info') {
   min-width: 0;
 }
 
+/* ── Scene name badge ── */
+.scene-badge {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: rgba(19,19,31,0.85);
+  border: 1px solid var(--c-storyjump);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--c-storyjump) 90%, white);
+  pointer-events: none;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene-badge svg { color: var(--c-storyjump); flex-shrink: 0; }
+
 /* ── Auto-save badge ── */
 .autosave-badge {
   position: absolute;
-  top: 10px;
+  top: 40px;
   left: 50%;
   transform: translateX(-50%) translateY(-6px);
   display: flex;
