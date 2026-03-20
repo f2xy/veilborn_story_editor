@@ -356,7 +356,7 @@
         <div class="form-group">
           <label class="form-label">Target Scene</label>
           <select class="input" :value="data.targetStoryId"
-            @change="patch({ targetStoryId: $event.target.value })">
+            @change="patch({ targetStoryId: $event.target.value, targetNodeId: '' })">
             <option value="">— select scene —</option>
             <option
               v-for="s in availableTargetStories"
@@ -365,18 +365,39 @@
             >{{ s.title }}</option>
           </select>
         </div>
+
+        <div class="form-group" v-if="data.targetStoryId">
+          <label class="form-label">Start From Node</label>
+          <select class="input" :value="data.targetNodeId"
+            @change="patch({ targetNodeId: $event.target.value })">
+            <option value="">— scene start (default) —</option>
+            <option
+              v-for="n in jumpTargetNodes"
+              :key="n.id"
+              :value="n.id"
+            >{{ n.label }}</option>
+          </select>
+          <div class="var-hint">Leave empty to start from the scene's first node</div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Label (optional)</label>
           <input class="input" :value="data.label"
             @input="patch({ label: $event.target.value })"
             placeholder="e.g. Enter the dark path…" />
         </div>
+
         <div v-if="data.targetStoryId && jumpTargetTitle" class="jump-preview-box">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M5 12h14"/>
             <path d="m12 5 7 7-7 7"/>
           </svg>
-          <span>Jumps to: <strong>{{ jumpTargetTitle }}</strong></span>
+          <span>
+            Jumps to: <strong>{{ jumpTargetTitle }}</strong>
+            <template v-if="data.targetNodeId && jumpTargetNodeLabel">
+              → <strong>{{ jumpTargetNodeLabel }}</strong>
+            </template>
+          </span>
         </div>
         <div class="branch-info" style="margin-top:10px">
           <div class="bi" style="color: var(--c-storyjump)">
@@ -472,6 +493,38 @@ const availableTargetStories = computed(() =>
 const jumpTargetTitle = computed(() =>
   storiesStore.stories.find(s => s.id === data.value?.targetStoryId)?.title ?? ''
 )
+
+// Build a labelled list of nodes from the target story for the node dropdown
+function _nodeLabel(n) {
+  const typeTag = { dialogue: 'Dialogue', condition: 'Condition', conditionSwitch: 'Switch', setVariable: 'SetVar', storyJump: 'Jump' }[n.type] ?? n.type
+  if (n.type === 'dialogue') {
+    const char = n.data?.character ? `${n.data.character}: ` : ''
+    const text = (n.data?.text || '').slice(0, 40) || '(empty)'
+    return `[${typeTag}] ${char}${text}`
+  }
+  if (n.type === 'condition') {
+    const c = n.data?.conditions?.[0]
+    return `[${typeTag}] ${c?.variable || '?'} ${c?.operator || '=='} ${c?.value ?? '?'}`
+  }
+  if (n.type === 'conditionSwitch') {
+    return `[${typeTag}] ${n.data?.variable || '?'}`
+  }
+  if (n.type === 'setVariable') {
+    return `[${typeTag}] ${n.data?.variable || '?'} ${n.data?.operation || '='} ${n.data?.value ?? '?'}`
+  }
+  return `[${typeTag}] ${n.id}`
+}
+
+const jumpTargetNodes = computed(() => {
+  const story = storiesStore.stories.find(s => s.id === data.value?.targetStoryId)
+  if (!story) return []
+  return (story.nodes || []).map(n => ({ id: n.id, label: _nodeLabel(n) }))
+})
+
+const jumpTargetNodeLabel = computed(() => {
+  if (!data.value?.targetNodeId) return ''
+  return jumpTargetNodes.value.find(n => n.id === data.value.targetNodeId)?.label ?? data.value.targetNodeId
+})
 
 // For setVariable
 const selectedParamType = computed(() => {

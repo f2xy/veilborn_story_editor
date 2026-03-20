@@ -209,8 +209,13 @@ function navigate(nodeId, depth = 0) {
       ? (props.story.stories || []).find(s => s.id === targetId)
       : null
     const storyTitle = targetStory?.title ?? 'Bilinmeyen Sahne'
-    const targetNode = targetStory?.startNodeId ?? targetStory?.nodes?.[0]?.id ?? null
-    stepLog.value.push({ kind: 'jump', icon: '↪', text: `Sahneye geçildi: ${storyTitle}` })
+    // Use explicitly specified targetNodeId first, then story startNodeId, then first node
+    const targetNode = node.data.targetNodeId
+      || targetStory?.startNodeId
+      || targetStory?.nodes?.[0]?.id
+      || null
+    const logDetail = node.data.targetNodeId ? ` → ${node.data.targetNodeId.slice(0, 20)}` : ''
+    stepLog.value.push({ kind: 'jump', icon: '↪', text: `Sahneye geçildi: ${storyTitle}${logDetail}` })
     if (!targetNode) { endStory(`Hedef sahne bulunamadı: ${storyTitle}`); return }
     navigate(targetNode, depth + 1)
   }

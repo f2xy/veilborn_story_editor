@@ -29,6 +29,13 @@
         </svg>
         Select target scene…
       </div>
+      <div v-if="targetNodeLabel" class="jump-node-row">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+        <span class="jump-node-label">{{ targetNodeLabel }}</span>
+      </div>
+      <div v-else-if="targetTitle" class="jump-node-row muted">scene start</div>
       <div v-if="data.label" class="jump-label">{{ data.label }}</div>
     </div>
   </div>
@@ -48,6 +55,19 @@ const props = defineProps({
 const targetTitle = computed(() => {
   if (!props.data?.targetStoryId) return null
   return storiesStore.stories.find(s => s.id === props.data.targetStoryId)?.title ?? null
+})
+
+const targetNodeLabel = computed(() => {
+  if (!props.data?.targetNodeId || !props.data?.targetStoryId) return null
+  const story = storiesStore.stories.find(s => s.id === props.data.targetStoryId)
+  const node = (story?.nodes || []).find(n => n.id === props.data.targetNodeId)
+  if (!node) return null
+  if (node.type === 'dialogue') {
+    const char = node.data?.character ? `${node.data.character}: ` : ''
+    const text = (node.data?.text || '').slice(0, 28) || '(empty)'
+    return `${char}${text}`
+  }
+  return node.id
 })
 </script>
 
@@ -74,6 +94,26 @@ const targetTitle = computed(() => {
 }
 
 .jump-destination.empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.jump-node-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  overflow: hidden;
+}
+.jump-node-row svg { flex-shrink: 0; color: var(--c-storyjump); }
+.jump-node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jump-node-row.muted {
   color: var(--text-muted);
   font-style: italic;
 }

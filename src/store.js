@@ -43,7 +43,7 @@ export function createNodeData(type) {
     case 'setVariable':
       return { variable: '', operation: 'set', value: '' }
     case 'storyJump':
-      return { targetStoryId: '', label: '' }
+      return { targetStoryId: '', targetNodeId: '', label: '' }
     default:
       return {}
   }
