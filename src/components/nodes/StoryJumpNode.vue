@@ -43,8 +43,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Handle } from '@vue-flow/core'
-import { storiesStore } from '@/store.js'
+import { Handle, useVueFlow } from '@vue-flow/core'
+import { storiesStore, FLOW_ID } from '@/store.js'
+
+const { nodes: canvasNodes } = useVueFlow(FLOW_ID)
 
 const props = defineProps({
   id:       String,
@@ -52,15 +54,23 @@ const props = defineProps({
   selected: Boolean
 })
 
+const isSameScene = computed(() =>
+  !!props.data?.targetStoryId && props.data.targetStoryId === storiesStore.activeStoryId
+)
+
 const targetTitle = computed(() => {
   if (!props.data?.targetStoryId) return null
-  return storiesStore.stories.find(s => s.id === props.data.targetStoryId)?.title ?? null
+  const title = storiesStore.stories.find(s => s.id === props.data.targetStoryId)?.title ?? null
+  return title ? (isSameScene.value ? `${title} (current)` : title) : null
 })
 
 const targetNodeLabel = computed(() => {
   if (!props.data?.targetNodeId || !props.data?.targetStoryId) return null
-  const story = storiesStore.stories.find(s => s.id === props.data.targetStoryId)
-  const node = (story?.nodes || []).find(n => n.id === props.data.targetNodeId)
+  // For active scene use live VueFlow nodes
+  const rawNodes = isSameScene.value
+    ? canvasNodes.value
+    : (storiesStore.stories.find(s => s.id === props.data.targetStoryId)?.nodes || [])
+  const node = rawNodes.find(n => n.id === props.data.targetNodeId)
   if (!node) return null
   if (node.type === 'dialogue') {
     const char = node.data?.character ? `${node.data.character}: ` : ''

@@ -428,7 +428,7 @@ import { computed, ref, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { uiStore, contextStore, storiesStore, genChoiceId, genCaseId, FLOW_ID } from '@/store.js'
 
-const { findNode, updateNode, removeNodes, removeEdges, getEdges } = useVueFlow(FLOW_ID)
+const { findNode, updateNode, removeNodes, removeEdges, getEdges, nodes: canvasNodes } = useVueFlow(FLOW_ID)
 
 const node = computed(() => {
   if (!uiStore.selectedNodeId) return null
@@ -486,9 +486,8 @@ const typeColor = computed(() => {
 })
 
 // ── Story Jump helpers ───────────────────────────────────────────────────────
-const availableTargetStories = computed(() =>
-  storiesStore.stories.filter(s => s.id !== storiesStore.activeStoryId)
-)
+// All scenes including the active one (same-scene jumps are valid for loops)
+const availableTargetStories = computed(() => storiesStore.stories)
 
 const jumpTargetTitle = computed(() =>
   storiesStore.stories.find(s => s.id === data.value?.targetStoryId)?.title ?? ''
@@ -516,9 +515,16 @@ function _nodeLabel(n) {
 }
 
 const jumpTargetNodes = computed(() => {
-  const story = storiesStore.stories.find(s => s.id === data.value?.targetStoryId)
-  if (!story) return []
-  return (story.nodes || []).map(n => ({ id: n.id, label: _nodeLabel(n) }))
+  const tid = data.value?.targetStoryId
+  if (!tid) return []
+  // Active scene: use live VueFlow canvas so unsaved changes are reflected
+  if (tid === storiesStore.activeStoryId) {
+    return canvasNodes.value
+      .filter(n => n.id !== node.value?.id)   // exclude the jump node itself
+      .map(n => ({ id: n.id, label: _nodeLabel(n) }))
+  }
+  const story = storiesStore.stories.find(s => s.id === tid)
+  return (story?.nodes || []).map(n => ({ id: n.id, label: _nodeLabel(n) }))
 })
 
 const jumpTargetNodeLabel = computed(() => {
